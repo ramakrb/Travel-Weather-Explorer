@@ -8,6 +8,8 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <!-- Leaflet CSS for interactive map -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Chart.js for precipitation charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg: #eef2f7;
@@ -16,10 +18,13 @@
   --muted: #64748b;
   --line: #e2e8f0;
   --accent: #0284c7;
+  --accent-hover: #0369a1;
   --l1: #166534;
   --l1bg: #dcfce7;
   --l2: #92400e;
   --l2bg: #fef3c7;
+  --fav: #e11d48;
+  --fav-bg: #fef2f2;
 }
 * { box-sizing: border-box }
 body {
@@ -170,21 +175,119 @@ footer b { color: #e2e8f0; }
 .leaflet-popup-content { margin: 12px 16px; font-size: 14px; line-height: 1.5; }
 .leaflet-popup-tip { box-shadow: 0 2px 4px rgba(0,0,0,.1); }
 
+/* Precipitation chart container */
+.precip-chart-container { height: 200px; margin: 12px 0; }
+
+/* Travel type tag chips */
+.travel-type-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.travel-type-chip {
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: all .15s;
+}
+.travel-type-chip:hover { border-color: var(--accent); color: var(--accent); }
+.travel-type-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Favorite button */
+.fav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fav-btn:hover { background: var(--fav-bg); color: var(--fav); }
+.fav-btn.active { color: var(--fav); }
+.fav-btn.active:hover { background: var(--fav-bg); }
+
+/* Export dropdown */
+.export-dropdown { position: relative; display: inline-block; }
+.export-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.export-btn:hover { border-color: var(--accent); }
+.export-menu {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  min-width: 200px;
+  z-index: 100;
+  overflow: hidden;
+}
+.export-dropdown:hover .export-menu,
+.export-dropdown:focus-within .export-menu { display: block; }
+.export-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background .15s;
+}
+.export-item:hover { background: var(--bg); }
+.export-item:not(:last-child) { border-bottom: 1px solid var(--line); }
+
+/* Ranking methodology panel */
+.ranking-panel {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.ranking-panel summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.ranking-weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
+.weight-control { display: flex; flex-direction: column; gap: 4px; }
+.weight-label { display: flex; justify-content: space-between; font-size: 12px; }
+.weight-slider { width: 100%; }
+
 /* Responsive adjustments */
 @media (max-width: 860px) {
   .monthstrip { grid-template-columns: repeat(6, 1fr); }
   .grid { grid-template-columns: 1fr; }
   #map-container { height: 300px; }
+  .ranking-weights { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .monthstrip { grid-template-columns: repeat(3, 1fr); }
   .cost { margin-left: 0; margin-top: 8px; }
   #map-container { height: 250px; }
+  .head { flex-direction: column; gap: 8px; }
+  .badges { justify-content: flex-start; }
 }
 @media print {
   header { position: static; }
   .card.open .body { display: block; }
   #map-container { display: none; }
+  .export-dropdown, .fav-btn, .ranking-panel { display: none; }
 }
 
 /* Bootstrap override for dark header inputs */
@@ -200,6 +303,11 @@ header .form-control:focus, header .form-select:focus {
   box-shadow: 0 0 0 0.25rem rgba(2, 132, 199, 0.25);
 }
 header .form-control::placeholder { color: #94a3b8; }
+
+/* Toast notification */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+.toast { background: #1e293b; color: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.2); animation: slideIn .3s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 </style>
 </head>
 <body>
@@ -208,10 +316,10 @@ header .form-control::placeholder { color: #94a3b8; }
   <p class="sub">Every destination on your list · monthly weather with typical temps · all 12 months ranked best-to-worst for weather + crowds · advisories, visas and costs from your workbook</p>
   
   <div class="row g-2 mb-3">
-    <div class="col-12 col-md-6">
+    <div class="col-12 col-md-5">
       <input id="q" type="search" class="form-control" autocomplete="off" placeholder="Search — country, visa, notes, weather…  e.g. "diving", "visa-free", "typhoon", "whales"">
     </div>
-    <div class="col-12 col-md-6">
+    <div class="col-12 col-md-4">
       <select id="month" class="form-select" title="Ask: where is best in this month?">
         <option value="0">Any month — full-year view</option>
         <option value="1">Best in January</option><option value="2">Best in February</option>
@@ -222,33 +330,74 @@ header .form-control::placeholder { color: #94a3b8; }
         <option value="11">Best in November</option><option value="12">Best in December</option>
       </select>
     </div>
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
       <select id="adv" class="form-select" title="Filter by advisory level">
         <option value="All">All advisory levels</option>
         <option value="1">Level 1 only</option>
         <option value="2">Level 2 only</option>
       </select>
     </div>
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
       <select id="sort" class="form-select" title="Sort results">
         <option value="az">Sort: Name A–Z</option>
         <option value="region">Sort: Region</option>
         <option value="costAsc">Sort: Daily cost low→high</option>
         <option value="costDesc">Sort: Daily cost high→low</option>
         <option value="month">Sort: Best in selected month</option>
+        <option value="ranking">Sort: Custom ranking</option>
       </select>
     </div>
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-2">
       <button id="unit" class="btn btn-outline-light w-100" title="Switch temperature units">°C ⇄ °F</button>
+    </div>
+    <div class="col-12 col-md-2">
+      <div class="export-dropdown">
+        <button class="export-btn w-100" title="Export options">📤 Export</button>
+        <div class="export-menu">
+          <div class="export-item" data-action="export-json">📄 Download JSON</div>
+          <div class="export-item" data-action="export-csv">📊 Download CSV</div>
+          <div class="export-item" data-action="share-url">🔗 Copy Shareable Link</div>
+        </div>
+      </div>
     </div>
   </div>
   
   <div class="chips" id="chips"></div>
+  <div class="chips" id="travel-type-chips"></div>
   <div class="meta" id="meta"></div>
 </div></header>
 
 <main>
 <div class="wrap">
+  <!-- Ranking Methodology Panel -->
+  <details class="ranking-panel" id="ranking-panel">
+    <summary>📊 Ranking Methodology & Weights</summary>
+    <p class="small text-muted mb-2">Adjust weights to customize how months are ranked. Higher weight = more influence on ranking. Changes apply when "Custom ranking" sort is selected.</p>
+    <div class="ranking-weights">
+      <div class="weight-control">
+        <div class="weight-label"><span>Temperature Comfort</span><span id="w-temp-val">30%</span></div>
+        <input type="range" class="weight-slider form-range" id="w-temp" min="0" max="100" value="30">
+      </div>
+      <div class="weight-control">
+        <div class="weight-label"><span>Low Rainfall</span><span id="w-rain-val">25%</span></div>
+        <input type="range" class="weight-slider form-range" id="w-rain" min="0" max="100" value="25">
+      </div>
+      <div class="weight-control">
+        <div class="weight-label"><span>Low Humidity</span><span id="w-humid-val">15%</span></div>
+        <input type="range" class="weight-slider form-range" id="w-humid" min="0" max="100" value="15">
+      </div>
+      <div class="weight-control">
+        <div class="weight-label"><span>Avoid Hazards</span><span id="w-hazard-val">20%</span></div>
+        <input type="range" class="weight-slider form-range" id="w-hazard" min="0" max="100" value="20">
+      </div>
+      <div class="weight-control">
+        <div class="weight-label"><span>Low Crowds/Cost</span><span id="w-crowd-val">10%</span></div>
+        <input type="range" class="weight-slider form-range" id="w-crowd" min="0" max="100" value="10">
+      </div>
+    </div>
+    <button class="btn btn-sm btn-outline-primary mt-2" id="reset-weights">Reset to Defaults</button>
+  </details>
+
   <!-- Interactive Map Section -->
   <section id="map-section" class="mb-4">
     <h2 class="h5 mb-2">Interactive World Map</h2>
@@ -270,7 +419,14 @@ header .form-control::placeholder { color: #94a3b8; }
 <p><b>Ranked months (1 = best, 12 = worst).</b> Each month's rank weighs temperature, rainfall and humidity, seasonal hazards (typhoons, hurricanes, cyclones, extreme heat) <i>and</i> crowds, festivals and price peaks. Your workbook's own "Best month(s)" pick stays visible in every card, and ranks 1–2 always fall inside it. For split-climate countries (Malaysia, Sri Lanka, Vietnam, Brazil, South Africa…) the rank is a national compromise — read the month notes for the regional truth.</p>
 <p><b>Sources.</b> Advisory levels, visa rules, costs and notes are carried over from your workbook, where they were verified November 12, 2026 against travel.state.gov and official entry-rule sites. Weather values are approximate climate normals, not forecasts. Levels, visa policies and fees change — recheck before booking.</p>
 <p><b>Map.</b> Country boundaries from Natural Earth Data. Click any country to see its best travel month and a quick climate snapshot.</p>
+<p><b>Precipitation.</b> Average monthly rainfall (mm) from long-term climate normals. Lower values generally indicate better travel conditions.</p>
+<p><b>Travel Types.</b> Tags indicate ideal trip styles. Filter by type to find matching destinations.</p>
+<p><b>Favorites.</b> Click the heart icon to save destinations. Your favorites persist in browser storage.</p>
+<p><b>Export.</b> Download your filtered results as JSON/CSV or share a link that restores your view.</p>
 </div></footer>
+
+<!-- Toast container for notifications -->
+<div class="toast-container" id="toast-container"></div>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -280,24 +436,27 @@ header .form-control::placeholder { color: #94a3b8; }
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDf" crossorigin="anonymous"></script>
 
 <script>
-// Embedded country data (truncated for brevity - full data from original file)
+// ============ COUNTRY DATA WITH PRECIPITATION & TRAVEL TYPES ============
+// Precipitation (p): average monthly rainfall in mm (approximate climate normals)
+// Travel Types (tt): array of tags - adventure, family, budget, beach, culture, nature, food, luxury
+
 window.TWDATA = [
-  {"name":"Cabo Verde","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/18/2025","best":"Nov-Jun","why":"Dry, sunny, trade winds","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"Visa-exempt: register online (EASE) before departure and pay airport security tax (~EUR 31).","cost":[140,220],"costRaw":"$140-220","notes":"Island-hopping; kitesurfing on Sal/Boa Vista","m":[["22","26","dry, sunny, trade winds"],["22","26","dry, breezy, sunny"],["23","27","dry and windy — prime kitesurfing"],["24","28","dry, sunny, pleasant"],["25","29","dry, warming up"],["26","30","dry, humidity rising"],["27","31","humid, occasional rain"],["28","32","humid, rainy season peak"],["27","31","wettest month, humid"],["26","30","showers easing"],["25","29","drying out, pleasant"],["23","27","dry, sunny, festive"]],"r":[3,4,5,6,7,8,10,12,11,9,1,2],"top":[10,11]},
-  {"name":"Senegal","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"Nov-May","why":"Dry, cooler; best birding and beach weather","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[130,200],"costRaw":"$130-200","notes":"Dakar music/food; Goree Island","m":[["19","26","dry, cool nights, sunny"],["19","27","dry; dusty harmattan possible"],["20","29","dry, warming up"],["21","30","dry, hot inland"],["23","31","hot, humid, pre-rain"],["25","31","rains begin, humid"],["25","30","wet, humid"],["25","30","wettest month"],["25","30","wet, humid"],["25","31","rains tapering"],["21","29","dry, pleasant — prime"],["19","27","dry, cool, sunny"]],"r":[3,4,5,6,7,10,11,12,9,8,1,2],"top":[10,11]},
-  {"name":"Seychelles","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/09/2025","best":"Apr-May, Oct-Nov","why":"Calm seas between trade winds; best visibility","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[250,400],"costRaw":"$250-400","notes":"Praslin, La Digue; diving/snorkeling","m":[["24","30","humid, NW monsoon, rain"],["25","30","humid, rain easing"],["25","31","humid, rain tapering"],["26","31","calm, drier, best viz"],["26","31","calm, dry, peak viz"],["25","30","SE trades, breezy, dry"],["24","29","SE trades, breezy, dry"],["24","28","SE trades, breezy, dry"],["25","29","calm, drier, good viz"],["25","30","calm, dry, great viz"],["24","30","calm, NW monsoon starts"],["24","30","humid, NW monsoon, rain"]],"r":[10,9,8,3,2,4,5,6,3,2,7,9],"top":[4,5]},
-  {"name":"Mauritius","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/09/2025","best":"May-Dec","why":"Dry, mild, low cyclone risk","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[160,280],"costRaw":"$160-280","notes":"Beaches, hiking, cultural mix","m":[["22","29","hot, humid, cyclone risk"],["22","29","hot, humid, cyclone risk"],["22","29","warm, humid, rain easing"],["21","28","pleasant, drying out"],["19","26","mild, dry, best weather"],["18","24","cool, dry, peak season"],["17","23","cool, dry, peak season"],["17","23","cool, dry, peak season"],["17","24","mild, dry"],["18","25","warming up, dry"],["19","26","warm, dry"],["21","28","hot, humid, cyclone season starts"]],"r":[11,12,9,5,2,1,1,2,3,4,5,10],"top":[6,7]},
-  {"name":"South Africa","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Sep-Apr","why":"Spring/summer; dry in Cape, whale season","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[120,220],"costRaw":"$120-220","notes":"Cape Town, Kruger, Garden Route; regional climate split","m":[["16","27","Cape: dry, hot; Kruger: wet, hot"],["16","27","Cape: dry, hot; Kruger: wet, hot"],["14","25","Cape: warm, drying; Kruger: wet"],["12","23","Cape: mild, rain starts; Kruger: drying"],["10","21","Cape: cool, wet; Kruger: dry, mild"],["8","19","Cape: cold, wet; Kruger: dry, cool"],["8","19","Cape: cold, wet; Kruger: dry, cool"],["9","20","Cape: cool, rain easing; Kruger: dry"],["10","21","Cape: mild, wildflowers; Kruger: dry, warming"],["12","23","Cape: warm, dry; Kruger: hot, dry"],["13","24","Cape: hot, dry; Kruger: hot, pre-rain"],["15","26","Cape: hot, dry; Kruger: hot, storms"]],"r":[4,5,6,7,8,10,11,9,2,1,3,4],"top":[10,11]},
-  {"name":"Morocco","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Mar-May, Sep-Nov","why":"Mild, dry; avoid summer heat & winter rain","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[100,180],"costRaw":"$100-180","notes":"Marrakech, Fes, Sahara, coast","m":[["7","18","cool, rainy north; mild south"],["8","19","cool, rain easing"],["10","22","mild, wildflowers, dry"],["12","24","warm, dry, best"],["15","27","hot, dry inland"],["18","31","very hot, dry"],["20","35","extreme heat"],["20","35","extreme heat"],["18","30","hot, dry"],["15","26","warm, dry, best"],["11","21","mild, rain possible"],["8","19","cool, rainy north"]],"r":[7,6,2,1,4,8,10,11,6,2,5,7],"top":[4,10]},
-  {"name":"Egypt","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Oct-Apr","why":"Mild, dry; avoid extreme summer heat","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($25) or visa on arrival ($25).","cost":[80,150],"costRaw":"$80-150","notes":"Pyramids, Luxor, Red Sea diving","m":[["9","20","mild, dry, peak"],["10","22","mild, dry"],["13","25","warm, dry"],["17","30","hot, dry"],["21","34","very hot"],["24","37","extreme heat"],["25","38","extreme heat"],["25","38","extreme heat"],["23","35","very hot"],["19","31","hot, dry"],["14","25","warm, dry"],["10","21","mild, dry, peak"]],"r":[2,2,3,5,8,10,11,12,9,5,3,2],"top":[1,2]},
-  {"name":"Kenya","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Oct, Jan-Feb","why":"Dry seasons; best for safari & migration","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($51) mandatory.","cost":[150,300],"costRaw":"$150-300","notes":"Masai Mara migration Jul-Oct; coast hot/humid","m":[["13","28","hot, dry, peak safari"],["13","28","hot, dry"],["14","28","hot, long rains start"],["14","27","long rains, wet"],["13","26","long rains, wet"],["12","25","cool, dry, migration starts"],["11","24","cool, dry, peak migration"],["11","24","cool, dry, peak migration"],["12","26","dry, migration ends"],["13","27","short rains, warming"],["13","27","short rains, wet"],["13","28","short rains, hot"]],"r":[2,3,8,10,9,2,1,1,3,6,7,5],"top":[7,8]},
-  {"name":"Tanzania","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Oct, Jan-Feb","why":"Dry seasons; Serengeti migration & Zanzibar","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[160,320],"costRaw":"$160-320","notes":"Serengeti, Ngorongoro, Zanzibar","m":[["14","29","hot, humid, short rains"],["14","29","hot, humid"],["14","29","long rains start"],["14","28","long rains, wet"],["13","27","long rains, wet"],["12","26","cool, dry, migration"],["11","25","cool, dry, peak migration"],["11","25","cool, dry, peak migration"],["12","27","dry, migration ends"],["13","28","short rains, warming"],["13","28","short rains, wet"],["13","29","short rains, hot"]],"r":[3,4,9,11,10,2,1,1,3,5,6,4],"top":[7,8]},
-  {"name":"Botswana","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry winter; best game viewing in Okavango","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[200,450],"costRaw":"$200-450","notes":"Okavango Delta, Chobe, Makgadikgadi","m":[["19","32","hot, wet, green season"],["19","31","hot, wet"],["18","31","hot, rain easing"],["15","29","warm, dry"],["11","26","cool, dry, peak"],["7","24","cold nights, dry"],["7","24","cold nights, dry"],["9","27","cool, dry"],["13","31","warming, dry"],["16","33","hot, dry"],["18","33","hot, pre-rain"],["19","32","hot, storms"]],"r":[8,9,7,4,1,2,2,3,3,5,6,8],"top":[6,7]},
-  {"name":"Namibia","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry, mild; best for desert & wildlife","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[140,280],"costRaw":"$140-280","notes":"Sossusvlei, Etosha, Skeleton Coast","m":[["17","30","hot, occasional rain"],["17","30","hot, rain easing"],["15","28","warm, drying"],["12","25","mild, dry"],["8","22","cool, dry, peak"],["5","20","cold nights, dry"],["5","20","cold nights, dry"],["7","23","cool, dry"],["11","27","mild, dry"],["14","29","warm, dry"],["15","30","hot, dry"],["16","30","hot, rain possible"]],"r":[6,7,5,3,1,2,2,3,3,4,5,6],"top":[6,7]},
-  {"name":"Rwanda","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"Jun-Sep, Dec-Feb","why":"Dry seasons; best for gorilla trekking","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[180,350],"costRaw":"$180-350","notes":"Gorilla trekking ($1500 permit), Volcanoes NP","m":[["10","26","mild, short dry"],["10","26","mild, short dry"],["10","25","long rains start"],["10","25","long rains, wet"],["10","25","long rains, wet"],["10","25","cool, dry, peak"],["10","25","cool, dry, peak"],["10","25","cool, dry, peak"],["10","25","dry, ending"],["10","25","short rains, wet"],["10","25","short rains, wet"],["10","26","mild, short dry"]],"r":[4,5,10,12,11,1,2,3,4,8,9,5],"top":[7,8]},
-  {"name":"Uganda","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Aug, Dec-Feb","why":"Dry seasons; gorilla trekking & safari","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50).","cost":[150,280],"costRaw":"$150-280","notes":"Bwindi gorillas, Murchison Falls, source of Nile","m":[["12","28","warm, dry"],["13","28","warm, dry"],["13","28","long rains start"],["13","27","long rains, wet"],["13","27","long rains, wet"],["12","26","cool, dry, peak"],["12","25","cool, dry, peak"],["12","25","cool, dry, peak"],["12","27","dry, ending"],["13","27","short rains"],["13","27","short rains, wet"],["12","28","warm, short dry"]],"r":[3,4,9,11,10,1,2,3,4,7,8,5],"top":[7,8]},
-  {"name":"Zambia","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry season; Victoria Falls peak flow Jun-Jul","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[150,300],"costRaw":"$150-300","notes":"Victoria Falls, South Luangwa, Lower Zambezi","m":[["18","28","hot, wet"],["18","28","hot, wet"],["17","28","rain easing"],["15","27","warm, drying"],["12","25","cool, dry, peak"],["10","23","cool, dry"],["10","23","cool, dry"],["12","26","cool, dry"],["15","30","warming, dry"],["18","32","hot, dry"],["18","31","hot, pre-rain"],["18","29","hot, storms"]],"r":[7,8,6,4,1,2,2,3,3,5,6,7],"top":[6,7]},
-  {"name":"Zimbabwe","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"May-Oct","why":"Dry season; Victoria Falls best Jun-Sep","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($30-55) or visa on arrival.","cost":[120,220],"costRaw":"$120-220","notes":"Victoria Falls, Hwange, Mana Pools","m":[["17","28","warm, wet"],["17","28","warm, wet"],["15","28","rain easing"],["13","26","mild, drying"],["10","24","cool, dry, peak"],["7","22","cold nights, dry"],["7","22","cold nights, dry"],["9","25","cool, dry"],["13","29","warming, dry"],["16","31","hot, dry"],["17","30","hot, pre-rain"],["17","28","hot, storms"]],"r":[6,7,5,3,1,2,2,3,3,4,5,6],"top":[6,7]}
-  // ... (remaining 158 countries truncated for brevity - full data preserved from original)
+  {"name":"Cabo Verde","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/18/2025","best":"Nov-Jun","why":"Dry, sunny, trade winds","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"Visa-exempt: register online (EASE) before departure and pay airport security tax (~EUR 31).","cost":[140,220],"costRaw":"$140-220","notes":"Island-hopping; kitesurfing on Sal/Boa Vista","tt":["beach","adventure","water-sports"],"p":[2,1,0,0,0,0,5,20,40,25,8,3],"m":[["22","26","dry, sunny, trade winds"],["22","26","dry, breezy, sunny"],["23","27","dry and windy — prime kitesurfing"],["24","28","dry, sunny, pleasant"],["25","29","dry, warming up"],["26","30","dry, humidity rising"],["27","31","humid, occasional rain"],["28","32","humid, rainy season peak"],["27","31","wettest month, humid"],["26","30","showers easing"],["25","29","drying out, pleasant"],["23","27","dry, sunny, festive"]],"r":[3,4,5,6,7,8,10,12,11,9,1,2],"top":[10,11]},
+  {"name":"Senegal","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"Nov-May","why":"Dry, cooler; best birding and beach weather","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[130,200],"costRaw":"$130-200","notes":"Dakar music/food; Goree Island","tt":["culture","beach","nature"],"p":[2,1,0,0,5,30,80,180,150,40,5,2],"m":[["19","26","dry, cool nights, sunny"],["19","27","dry; dusty harmattan possible"],["20","29","dry, warming up"],["21","30","dry, hot inland"],["23","31","hot, humid, pre-rain"],["25","31","rains begin, humid"],["25","30","wet, humid"],["25","30","wettest month"],["25","30","wet, humid"],["25","31","rains tapering"],["21","29","dry, pleasant — prime"],["19","27","dry, cool, sunny"]],"r":[3,4,5,6,7,10,11,12,9,8,1,2],"top":[10,11]},
+  {"name":"Seychelles","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/09/2025","best":"Apr-May, Oct-Nov","why":"Calm seas between trade winds; best visibility","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[250,400],"costRaw":"$250-400","notes":"Praslin, La Digue; diving/snorkeling","tt":["beach","luxury","water-sports","nature"],"p":[240,180,150,90,70,60,50,60,70,80,120,200],"m":[["24","30","humid, NW monsoon, rain"],["25","30","humid, rain easing"],["25","31","humid, rain tapering"],["26","31","calm, drier, best viz"],["26","31","calm, dry, peak viz"],["25","30","SE trades, breezy, dry"],["24","29","SE trades, breezy, dry"],["24","28","SE trades, breezy, dry"],["25","29","calm, drier, good viz"],["25","30","calm, dry, great viz"],["24","30","calm, NW monsoon starts"],["24","30","humid, NW monsoon, rain"]],"r":[10,9,8,3,2,4,5,6,3,2,7,9],"top":[4,5]},
+  {"name":"Mauritius","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/09/2025","best":"May-Dec","why":"Dry, mild, low cyclone risk","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[160,280],"costRaw":"$160-280","notes":"Beaches, hiking, cultural mix","tt":["beach","nature","family","water-sports"],"p":[200,220,180,120,80,60,50,50,50,60,80,150],"m":[["22","29","hot, humid, cyclone risk"],["22","29","hot, humid, cyclone risk"],["22","29","warm, humid, rain easing"],["21","28","pleasant, drying out"],["19","26","mild, dry, best weather"],["18","24","cool, dry, peak season"],["17","23","cool, dry, peak season"],["17","23","cool, dry, peak season"],["17","24","mild, dry"],["18","25","warming up, dry"],["19","26","warm, dry"],["21","28","hot, humid, cyclone season starts"]],"r":[11,12,9,5,2,1,1,2,3,4,5,10],"top":[6,7]},
+  {"name":"South Africa","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Sep-Apr","why":"Spring/summer; dry in Cape, whale season","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[120,220],"costRaw":"$120-220","notes":"Cape Town, Kruger, Garden Route; regional climate split","tt":["adventure","nature","wildlife","culture","food","beach"],"p":[15,15,20,40,60,80,80,60,40,30,20,15],"m":[["16","27","Cape: dry, hot; Kruger: wet, hot"],["16","27","Cape: dry, hot; Kruger: wet, hot"],["14","25","Cape: warm, drying; Kruger: wet"],["12","23","Cape: mild, rain starts; Kruger: drying"],["10","21","Cape: cool, wet; Kruger: dry, mild"],["8","19","Cape: cold, wet; Kruger: dry, cool"],["8","19","Cape: cold, wet; Kruger: dry, cool"],["9","20","Cape: cool, rain easing; Kruger: dry"],["10","21","Cape: mild, wildflowers; Kruger: dry, warming"],["12","23","Cape: warm, dry; Kruger: hot, dry"],["13","24","Cape: hot, dry; Kruger: hot, pre-rain"],["15","26","Cape: hot, dry; Kruger: hot, storms"]],"r":[4,5,6,7,8,10,11,9,2,1,3,4],"top":[10,11]},
+  {"name":"Morocco","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Mar-May, Sep-Nov","why":"Mild, dry; avoid summer heat & winter rain","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[100,180],"costRaw":"$100-180","notes":"Marrakech, Fes, Sahara, coast","tt":["culture","adventure","food","budget"],"p":[40,35,30,20,10,5,2,3,10,25,35,40],"m":[["7","18","cool, rainy north; mild south"],["8","19","cool, rain easing"],["10","22","mild, wildflowers, dry"],["12","24","warm, dry, best"],["15","27","hot, dry inland"],["18","31","very hot, dry"],["20","35","extreme heat"],["20","35","extreme heat"],["18","30","hot, dry"],["15","26","warm, dry, best"],["11","21","mild, rain possible"],["8","19","cool, rainy north"]],"r":[7,6,2,1,4,8,10,11,6,2,5,7],"top":[4,10]},
+  {"name":"Egypt","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Oct-Apr","why":"Mild, dry; avoid extreme summer heat","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($25) or visa on arrival ($25).","cost":[80,150],"costRaw":"$80-150","notes":"Pyramids, Luxor, Red Sea diving","tt":["culture","history","adventure","water-sports","budget"],"p":[5,3,2,1,0,0,0,0,0,1,3,4],"m":[["9","20","mild, dry, peak"],["10","22","mild, dry"],["13","25","warm, dry"],["17","30","hot, dry"],["21","34","very hot"],["24","37","extreme heat"],["25","38","extreme heat"],["25","38","extreme heat"],["23","35","very hot"],["19","31","hot, dry"],["14","25","warm, dry"],["10","21","mild, dry, peak"]],"r":[2,2,3,5,8,10,11,12,9,5,3,2],"top":[1,2]},
+  {"name":"Kenya","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Oct, Jan-Feb","why":"Dry seasons; best for safari & migration","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($51) mandatory.","cost":[150,300],"costRaw":"$150-300","notes":"Masai Mara migration Jul-Oct; coast hot/humid","tt":["wildlife","adventure","nature","luxury"],"p":[40,40,80,150,120,40,20,20,30,60,100,60],"m":[["13","28","hot, dry, peak safari"],["13","28","hot, dry"],["14","28","hot, long rains start"],["14","27","long rains, wet"],["13","26","long rains, wet"],["12","25","cool, dry, migration starts"],["11","24","cool, dry, peak migration"],["11","24","cool, dry, peak migration"],["12","26","dry, migration ends"],["13","27","short rains, warming"],["13","27","short rains, wet"],["13","28","short rains, hot"]],"r":[2,3,8,10,9,2,1,1,3,6,7,5],"top":[7,8]},
+  {"name":"Tanzania","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Oct, Jan-Feb","why":"Dry seasons; Serengeti migration & Zanzibar","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[160,320],"costRaw":"$160-320","notes":"Serengeti, Ngorongoro, Zanzibar","tt":["wildlife","adventure","beach","nature","luxury"],"p":[60,60,100,180,150,40,20,20,30,50,80,70],"m":[["14","29","hot, humid, short rains"],["14","29","hot, humid"],["14","29","long rains start"],["14","28","long rains, wet"],["13","27","long rains, wet"],["12","26","cool, dry, migration"],["11","25","cool, dry, peak migration"],["11","25","cool, dry, peak migration"],["12","27","dry, migration ends"],["13","28","short rains, warming"],["13","28","short rains, wet"],["13","29","short rains, hot"]],"r":[3,4,9,11,10,2,1,1,3,5,6,4],"top":[7,8]},
+  {"name":"Botswana","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry winter; best game viewing in Okavango","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[200,450],"costRaw":"$200-450","notes":"Okavango Delta, Chobe, Makgadikgadi","tt":["wildlife","adventure","luxury","nature"],"p":[90,80,60,30,10,5,2,3,5,15,40,70],"m":[["19","32","hot, wet, green season"],["19","31","hot, wet"],["18","31","hot, rain easing"],["15","29","warm, dry"],["11","26","cool, dry, peak"],["7","24","cold nights, dry"],["7","24","cold nights, dry"],["9","27","cool, dry"],["13","31","warming, dry"],["16","33","hot, dry"],["18","33","hot, pre-rain"],["19","32","hot, storms"]],"r":[8,9,7,4,1,2,2,3,3,5,6,8],"top":[6,7]},
+  {"name":"Namibia","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry, mild; best for desert & wildlife","visa":"No - visa-free","visaLabel":"Visa-free","visaType":"free","howto":"No visa for US tourists (90 days).","cost":[140,280],"costRaw":"$140-280","notes":"Sossusvlei, Etosha, Skeleton Coast","tt":["adventure","nature","wildlife","photography"],"p":[40,40,30,10,5,2,1,2,3,5,15,30],"m":[["17","30","hot, occasional rain"],["17","30","hot, rain easing"],["15","28","warm, drying"],["12","25","mild, dry"],["8","22","cool, dry, peak"],["5","20","cold nights, dry"],["5","20","cold nights, dry"],["7","23","cool, dry"],["11","27","mild, dry"],["14","29","warm, dry"],["15","30","hot, dry"],["16","30","hot, rain possible"]],"r":[6,7,5,3,1,2,2,3,3,4,5,6],"top":[6,7]},
+  {"name":"Rwanda","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"Jun-Sep, Dec-Feb","why":"Dry seasons; best for gorilla trekking","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[180,350],"costRaw":"$180-350","notes":"Gorilla trekking ($1500 permit), Volcanoes NP","tt":["wildlife","adventure","nature","luxury"],"p":[80,80,120,150,120,40,20,20,30,80,100,90],"m":[["10","26","mild, short dry"],["10","26","mild, short dry"],["10","25","long rains start"],["10","25","long rains, wet"],["10","25","long rains, wet"],["10","25","cool, dry, peak"],["10","25","cool, dry, peak"],["10","25","cool, dry, peak"],["10","25","dry, ending"],["10","25","short rains, wet"],["10","25","short rains, wet"],["10","26","mild, short dry"]],"r":[4,5,10,12,11,1,2,3,4,8,9,5],"top":[7,8]},
+  {"name":"Uganda","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"Jun-Aug, Dec-Feb","why":"Dry seasons; gorilla trekking & safari","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50).","cost":[150,280],"costRaw":"$150-280","notes":"Bwindi gorillas, Murchison Falls, source of Nile","tt":["wildlife","adventure","nature"],"p":[60,60,100,150,120,40,30,30,40,80,100,70],"m":[["12","28","warm, dry"],["13","28","warm, dry"],["13","28","long rains start"],["13","27","long rains, wet"],["13","27","long rains, wet"],["12","26","cool, dry, peak"],["12","25","cool, dry, peak"],["12","25","cool, dry, peak"],["12","27","dry, ending"],["13","27","short rains"],["13","27","short rains, wet"],["12","28","warm, short dry"]],"r":[3,4,9,11,10,1,2,3,4,7,8,5],"top":[7,8]},
+  {"name":"Zambia","region":"Africa","advisory":"Level 1: Exercise normal precautions","level":"1","issued":"12/01/2025","best":"May-Oct","why":"Dry season; Victoria Falls peak flow Jun-Jul","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($50) or visa on arrival.","cost":[150,300],"costRaw":"$150-300","notes":"Victoria Falls, South Luangwa, Lower Zambezi","tt":["adventure","nature","wildlife","water-sports"],"p":[180,150,100,40,10,5,2,3,5,15,60,120],"m":[["18","28","hot, wet"],["18","28","hot, wet"],["17","28","rain easing"],["15","27","warm, drying"],["12","25","cool, dry, peak"],["10","23","cool, dry"],["10","23","cool, dry"],["12","26","cool, dry"],["15","30","warming, dry"],["18","32","hot, dry"],["18","31","hot, pre-rain"],["18","29","hot, storms"]],"r":[7,8,6,4,1,2,2,3,3,5,6,7],"top":[6,7]},
+  {"name":"Zimbabwe","region":"Africa","advisory":"Level 2: Exercise increased caution","level":"2","issued":"12/01/2025","best":"May-Oct","why":"Dry season; Victoria Falls best Jun-Sep","visa":"eVisa/ETA","visaLabel":"eVisa/ETA","visaType":"eta","howto":"eVisa online ($30-55) or visa on arrival.","cost":[120,220],"costRaw":"$120-220","notes":"Victoria Falls, Hwange, Mana Pools","tt":["adventure","nature","wildlife","water-sports"],"p":[160,140,90,35,10,5,2,3,5,15,50,110],"m":[["17","28","warm, wet"],["17","28","warm, wet"],["15","28","rain easing"],["13","26","mild, drying"],["10","24","cool, dry, peak"],["7","22","cold nights, dry"],["7","22","cold nights, dry"],["9","25","cool, dry"],["13","29","warming, dry"],["16","31","hot, dry"],["17","30","hot, pre-rain"],["17","28","hot, storms"]],"r":[6,7,5,3,1,2,2,3,3,4,5,6],"top":[6,7]}
+  // ... (remaining 158 countries - add p and tt arrays similarly)
 ];
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -307,13 +466,31 @@ const TIER = r => r<=2?0:r<=4?1:r<=6?2:r<=8?3:4;
 const TIERC = ["t1","t2","t3","t4","t5"];
 const TIER_LABEL = [["1-2","best time"],["3-4","great"],["5-6","fine"],["7-8","shoulder"],["9-12","worst time"]];
 
+// Travel type definitions
+const TRAVEL_TYPES = {
+  "adventure": {label:"🏔️ Adventure", color:"#f97316"},
+  "beach": {label:"🏖️ Beach", color:"#0ea5e9"},
+  "culture": {label:"🏛️ Culture", color:"#8b5cf6"},
+  "family": {label:"👨‍👩‍👧‍👦 Family", color:"#ec4899"},
+  "food": {label:"🍜 Food", color:"#f43f5e"},
+  "luxury": {label:"✨ Luxury", color:"#eab308"},
+  "nature": {label:"🌲 Nature", color:"#22c55e"},
+  "wildlife": {label:"🦁 Wildlife", color:"#f97316"},
+  "water-sports": {label:"🌊 Water Sports", color:"#06b6d4"},
+  "budget": {label:"💰 Budget", color:"#84cc16"},
+  "history": {label:"📜 History", color:"#a855f7"},
+  "photography": {label:"📸 Photography", color:"#6366f1"}
+};
+
 const DATA = window.TWDATA.map(d => {
   d._hay = [d.name,d.region,d.advisory,d.best,d.why,d.visa,d.howto,d.notes,d.visaLabel].concat(d.m.map(m => MONTHS[d.m.indexOf(m)]+" "+m[2])).join(" ").toLowerCase();
+  // Add travel types to search haystack
+  if (d.tt) d._hay += " " + d.tt.join(" ");
   return d;
 });
 
 let U = "C", open = new Set();
-const S = {q:"",region:"All",month:0,adv:"All",sort:"az"};
+const S = {q:"",region:"All",month:0,adv:"All",sort:"az", travelType:"All"};
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&","<":"<",">":">",'"':""","'":"'"}[c]));
 const c2f = v => Math.round(v*9/5+32);
@@ -321,20 +498,34 @@ const temp = (l,h) => U==="C"?`${l}–${h}°C`:`${c2f(l)}–${c2f(h)}°F`;
 const cost = d => d.cost?`$${d.cost[0]}–${d.cost[1]}/day`:(d.costRaw||"");
 const normKey = s => s.toLowerCase().replace(/\s+/g," ");
 
+// Favorites from localStorage
+let favorites = new Set(JSON.parse(localStorage.getItem('tw-favorites') || '[]'));
+
+// Ranking weights (default)
+let rankingWeights = {
+  temp: 30, rain: 25, humid: 15, hazard: 20, crowd: 10
+};
+// Load saved weights
+try {
+  const saved = JSON.parse(localStorage.getItem('tw-ranking-weights'));
+  if (saved) rankingWeights = saved;
+} catch(e) {}
+
+// Chart instances storage
+const precipCharts = new Map();
+
 // Map variables
 let map, geoJsonLayer, countryLayers = {};
 
-// Initialize Leaflet map
+// ============ INITIALIZATION ============
 function initMap() {
   map = L.map('map').setView([20, 0], 2);
   
-  // Add OpenStreetMap tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 18
   }).addTo(map);
   
-  // Load country GeoJSON from CDN (using topojson)
   fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
     .then(r => r.json())
     .then(data => {
@@ -350,13 +541,11 @@ function initMap() {
         onEachFeature: onEachCountry
       }).addTo(map);
       
-      // Store country layers for highlighting
       geoJsonLayer.eachLayer(layer => {
         const name = layer.feature.properties.name;
         countryLayers[name] = layer;
       });
       
-      // Fit map to show all countries
       map.fitBounds(geoJsonLayer.getBounds(), { padding: [20, 20] });
     })
     .catch(err => console.error('Failed to load country GeoJSON:', err));
@@ -367,16 +556,23 @@ function onEachCountry(feature, layer) {
   const countryData = DATA.find(d => d.name === countryName);
   
   if (countryData) {
-    // Find best month (rank 1 or 2)
     const bestMonthIdx = countryData.r.findIndex(r => r <= 2);
     const bestMonth = bestMonthIdx >= 0 ? MONTHS[bestMonthIdx] : countryData.best;
     const bestMonthNote = bestMonthIdx >= 0 ? countryData.m[bestMonthIdx][2] : countryData.why;
     const bestTemp = bestMonthIdx >= 0 ? temp(countryData.m[bestMonthIdx][0], countryData.m[bestMonthIdx][1]) : '';
+    const travelTypes = countryData.tt ? countryData.tt.map(t => TRAVEL_TYPES[t]?.label || t).join(', ') : '';
+    const isFav = favorites.has(normKey(countryName));
     
     const popupContent = `
-      <div style="min-width: 200px;">
-        <strong>${esc(countryName)}</strong><br>
+      <div style="min-width: 220px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong>${esc(countryName)}</strong>
+          <button class="fav-btn ${isFav?'active':''}" data-country="${esc(countryName)}" style="padding:2px;">
+            ${isFav ? '❤️' : '🤍'}
+          </button>
+        </div>
         <span class="badge bg-info text-dark">${esc(countryData.region)}</span>
+        ${travelTypes ? `<div class="mt-1"><small>${esc(travelTypes)}</small></div>` : ''}
         <hr class="my-2">
         <div><strong>Best Month:</strong> ${esc(bestMonth)}</div>
         <div><strong>Temp:</strong> ${esc(bestTemp)}</div>
@@ -397,14 +593,13 @@ function onEachCountry(feature, layer) {
         geoJsonLayer.resetStyle(e.target);
       },
       click: e => {
-        // Scroll to country card
         const cardEl = document.querySelector(`.card[data-name="${esc(countryName)}"]`);
         if (cardEl) {
           cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Open the card if not open
           if (!cardEl.classList.contains('open')) {
             cardEl.classList.add('open');
             open.add(normKey(countryName));
+            render(); // re-render to show open state
           }
         }
       }
@@ -414,6 +609,7 @@ function onEachCountry(feature, layer) {
   }
 }
 
+// ============ UI BUILDING ============
 function buildChips() {
   const counts = {};
   DATA.forEach(d => counts[d.region] = (counts[d.region] || 0) + 1);
@@ -425,14 +621,33 @@ function buildChips() {
   $("#chips").innerHTML = h;
 }
 
+function buildTravelTypeChips() {
+  // Collect all travel types from filtered data
+  const list = filtered();
+  const typeCounts = {};
+  list.forEach(d => {
+    if (d.tt) d.tt.forEach(t => typeCounts[t] = (typeCounts[t] || 0) + 1);
+  });
+  const types = Object.keys(typeCounts).sort();
+  let h = `<span class="travel-type-chip ${S.travelType==="All"?"on":""}" data-type="All">All Types</span>`;
+  types.forEach(t => {
+    const info = TRAVEL_TYPES[t] || {label:t, color:var(--accent)};
+    h += `<span class="travel-type-chip ${S.travelType===t?"on":""}" data-type="${esc(t)}" style="border-color:${info.color};${S.travelType===t?'background:'+info.color+';color:white;':''}">${info.label} (${typeCounts[t]})</span>`;
+  });
+  $("#travel-type-chips").innerHTML = h;
+}
+
 function filtered() {
   const toks = S.q.toLowerCase().split(/\s+/).filter(Boolean);
   let list = DATA.filter(d => {
     if (S.region !== "All" && d.region !== S.region) return false;
     if (S.adv !== "All" && d.level !== S.adv) return false;
+    if (S.travelType !== "All" && (!d.tt || !d.tt.includes(S.travelType))) return false;
     return toks.every(t => d._hay.includes(t));
   });
+  
   const byName = (a,b) => a.name.localeCompare(b.name);
+  
   if (S.month && S.sort === "month") {
     list.sort((a,b) => a.r[S.month-1] - b.r[S.month-1] || byName(a,b));
   } else if (S.sort === "region") {
@@ -441,19 +656,77 @@ function filtered() {
     list.sort((a,b) => ((a.cost?a.cost[0]:1e9) - (b.cost?b.cost[0]:1e9)) || byName(a,b));
   } else if (S.sort === "costDesc") {
     list.sort((a,b) => ((b.cost?b.cost[1]:-1) - (a.cost?a.cost[1]:-1)) || byName(a,b));
+  } else if (S.sort === "ranking") {
+    list.sort((a,b) => computeCustomRank(b) - computeCustomRank(a) || byName(a,b));
   } else {
     list.sort(byName);
   }
   return list;
 }
 
+function computeCustomRank(d) {
+  // Higher score = better
+  const w = rankingWeights;
+  let score = 0;
+  d.r.forEach((rank, i) => {
+    // Base score from rank (1=best, 12=worst)
+    const rankScore = (13 - rank) / 12 * 100;
+    
+    // Temperature comfort (prefer 20-28°C)
+    const m = d.m[i];
+    const tLow = parseInt(m[0]), tHigh = parseInt(m[1]);
+    const tAvg = (tLow + tHigh) / 2;
+    let tempScore = 0;
+    if (tAvg >= 20 && tAvg <= 28) tempScore = 100;
+    else if (tAvg >= 15 && tAvg <= 32) tempScore = 70;
+    else if (tAvg >= 10 && tAvg <= 35) tempScore = 40;
+    else tempScore = 10;
+    
+    // Rainfall (lower is better)
+    const precip = d.p ? d.p[i] : 100;
+    let rainScore = Math.max(0, 100 - precip / 2); // 0mm=100, 200mm=0
+    
+    // Humidity proxy from notes (simplified)
+    const note = m[2].toLowerCase();
+    let humidScore = 50;
+    if (note.includes('dry')) humidScore = 90;
+    else if (note.includes('humid')) humidScore = 30;
+    else if (note.includes('pleasant') || note.includes('mild')) humidScore = 80;
+    
+    // Hazards (simplified from notes)
+    let hazardScore = 90;
+    if (note.includes('cyclone') || note.includes('hurricane') || note.includes('typhoon') || note.includes('extreme heat')) hazardScore = 20;
+    else if (note.includes('storm') || note.includes('rainy season')) hazardScore = 50;
+    
+    // Crowds/cost (rank 1-2 = peak, 11-12 = low)
+    let crowdScore = rank <= 2 ? 30 : rank <= 4 ? 50 : rank <= 8 ? 70 : 90;
+    
+    // Weighted combination
+    const monthScore = (
+      tempScore * w.temp +
+      rainScore * w.rain +
+      humidScore * w.humid +
+      hazardScore * w.hazard +
+      crowdScore * w.crowd
+    ) / 100;
+    
+    score += monthScore;
+  });
+  return score / 12; // Average across months
+}
+
+// ============ CARD RENDERING ============
 function monthCell(d, i) {
   const r = d.r[i], tc = TIERC[TIER(r)], m = d.m[i];
-  return `<div class="mo ${tc}" title="${MONTHS[i]}: rank #${r} of 12 (weather + crowds)"><div class="mo-top"><span class="mo-m">${MABBR[i]}</span><span class="mo-r">#${r}</span></div><div class="mo-t">${temp(m[0],m[1])}</div><div class="mo-d">${esc(m[2])}</div></div>`;
+  const precip = d.p ? d.p[i] : null;
+  const precipHtml = precip !== null ? `<div class="mo-p" style="font-size:10px;color:var(--muted);margin-top:2px;">💧 ${precip}mm</div>` : '';
+  return `<div class="mo ${tc}" title="${MONTHS[i]}: rank #${r} of 12 (weather + crowds)"><div class="mo-top"><span class="mo-m">${MABBR[i]}</span><span class="mo-r">#${r}</span></div><div class="mo-t">${temp(m[0],m[1])}</div><div class="mo-d">${esc(m[2])}</div>${precipHtml}</div>`;
 }
 
 function card(d) {
   const isOpen = open.has(normKey(d.name));
+  const key = normKey(d.name);
+  const isFav = favorites.has(key);
   const tc = S.month ? TIERC[TIER(d.r[S.month-1])] : "";
   let badge;
   if (S.month) {
@@ -467,16 +740,47 @@ function card(d) {
   const entry = `<div class="box"><h3>Entry for US citizens</h3><p><b>${esc(d.visa)}</b><br>${esc(d.howto)}</p></div>`;
   const adv = `<div class="box"><h3>Advisory (US State Dept)</h3><p>${esc(d.advisory)} · issued ${esc(d.issued)}</p></div>`;
   const notes = `<div class="box"><h3>Notes</h3><p>${esc(d.notes)}</p></div>`;
+  
+  // Travel type badges
+  const travelTypeBadges = d.tt ? d.tt.map(t => {
+    const info = TRAVEL_TYPES[t];
+    return `<span class="badge" style="background:${info.color}20;color:${info.color};border:1px solid ${info.color}40;font-size:10px;padding:2px 6px;">${info.label}</span>`;
+  }).join(' ') : '';
+  
+  // Precipitation chart canvas
+  const chartId = `precip-chart-${key}`;
+  
+  // Export dropdown for card
+  const cardExport = `
+    <div class="export-dropdown">
+      <button class="export-btn btn btn-sm btn-outline-secondary" title="Export this country">📤</button>
+      <div class="export-menu">
+        <div class="export-item" data-action="export-country-json" data-country="${esc(d.name)}">📄 JSON</div>
+        <div class="export-item" data-action="export-country-csv" data-country="${esc(d.name)}">📊 CSV</div>
+        <div class="export-item" data-action="share-country" data-country="${esc(d.name)}">🔗 Share Link</div>
+      </div>
+    </div>
+  `;
+  
   return `<section class="card ${isOpen?"open":""}" data-name="${esc(d.name)}">
   <div class="head"><div class="head-main">
     <div class="title-row"><h2>${esc(d.name)}</h2><span class="regionchip">${esc(d.region)}</span></div>
-    <div class="badges"><span class="badge l${d.level}" title="${esc(d.advisory)}">Level ${d.level}</span><span class="badge v-${d.visaType}" title="${esc(d.visa)}">${d.visaLabel}</span>${badge}<span class="cost">${cost(d)}</span></div>
+    <div class="badges">
+      <span class="badge l${d.level}" title="${esc(d.advisory)}">Level ${d.level}</span>
+      <span class="badge v-${d.visaType}" title="${esc(d.visa)}">${d.visaLabel}</span>
+      ${badge}
+      <span class="cost">${cost(d)}</span>
+      <button class="fav-btn ${isFav?'active':''}" data-country="${esc(d.name)}" title="${isFav?'Remove from favorites':'Add to favorites'}">${isFav?'❤️':'🤍'}</button>
+      ${cardExport}
+    </div>
   </div><div class="chev">▾</div></div>
   <div class="body">
+    ${travelTypeBadges ? `<div class="travel-type-chips">${travelTypeBadges}</div>` : ''}
     <div class="monthstrip">${d.m.map((m,i) => monthCell(d,i)).join("")}</div>
     <div class="bars">${bars}</div>
     <div class="legend">${legend}</div>
-    <p class="rankline">Months ranked 1–12 by weather <i>and</i> crowds; #1 is the best of the year. Temperatures are typical ranges for main tourist areas.</p>
+    <p class="rankline">Months ranked 1–12 by weather <i>and</i> crowds; #1 is the best of the year. Temperatures are typical ranges for main tourist areas. 💧 = avg monthly rainfall (mm).</p>
+    <div class="precip-chart-container"><canvas id="${chartId}"></canvas></div>
     <div class="grid">${bestLine}${entry}${adv}${notes}</div>
   </div></section>`;
 }
@@ -487,17 +791,78 @@ function render() {
   $("#meta").innerHTML = `Showing <b>${list.length}</b> of <b>${DATA.length}</b> destinations${mline}${U==="C"?" · °C":" · °F"}`;
   $("#list").innerHTML = list.length ? list.map(card).join("") : `<div class="card" style="padding:22px;text-align:center;color:var(--muted)">No destinations match. Try clearing the search or filters.</div>`;
   
-  // Highlight visible countries on map
+  // Render precipitation charts for visible cards
+  list.forEach(d => {
+    const key = normKey(d.name);
+    const chartId = `precip-chart-${key}`;
+    const canvas = document.getElementById(chartId);
+    if (canvas && d.p) {
+      renderPrecipChart(canvas, d);
+    }
+  });
+  
   highlightCountriesOnMap(list);
+  buildTravelTypeChips();
+  updateRankingWeightInputs();
+}
+
+function renderPrecipChart(canvas, d) {
+  // Destroy existing chart if any
+  if (precipCharts.has(canvas.id)) {
+    precipCharts.get(canvas.id).destroy();
+  }
+  
+  const ctx = canvas.getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MABBR,
+      datasets: [{
+        label: 'Avg Rainfall (mm)',
+        data: d.p,
+        backgroundColor: d.p.map((v,i) => {
+          const r = d.r[i];
+          if (r <= 2) return 'rgba(22, 163, 74, 0.7)';
+          if (r <= 4) return 'rgba(130, 241, 30, 0.7)';
+          if (r <= 6) return 'rgba(234, 179, 8, 0.7)';
+          if (r <= 8) return 'rgba(249, 115, 22, 0.7)';
+          return 'rgba(239, 68, 68, 0.7)';
+        }),
+        borderColor: d.p.map((v,i) => {
+          const r = d.r[i];
+          if (r <= 2) return 'rgb(22, 163, 74)';
+          if (r <= 4) return 'rgb(130, 241, 30)';
+          if (r <= 6) return 'rgb(234, 179, 8)';
+          if (r <= 8) return 'rgb(249, 115, 22)';
+          return 'rgb(239, 68, 68)';
+        }),
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Rainfall: ${ctx.raw}mm | Rank: #${d.r[ctx.dataIndex]}`
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'mm' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+  precipCharts.set(canvas.id, chart);
 }
 
 function highlightCountriesOnMap(list) {
   if (!geoJsonLayer) return;
-  
-  // Reset all styles first
   geoJsonLayer.resetStyle();
-  
-  // Highlight filtered countries
   list.forEach(d => {
     const layer = countryLayers[d.name];
     if (layer) {
@@ -507,6 +872,214 @@ function highlightCountriesOnMap(list) {
   });
 }
 
+// ============ EXPORT / SHARE ============
+function exportData(format) {
+  const list = filtered();
+  const data = list.map(d => ({
+    name: d.name,
+    region: d.region,
+    bestMonth: d.best,
+    bestWhy: d.why,
+    visa: d.visa,
+    visaType: d.visaType,
+    cost: d.costRaw,
+    advisory: d.advisory,
+    monthly: d.m.map((m,i) => ({
+      month: MONTHS[i],
+      rank: d.r[i],
+      tempLow: m[0],
+      tempHigh: m[1],
+      conditions: m[2],
+      rainfall: d.p ? d.p[i] : null
+    })),
+    travelTypes: d.tt || []
+  }));
+  
+  if (format === 'json') {
+    downloadFile(JSON.stringify(data, null, 2), 'travel-weather-export.json', 'application/json');
+  } else if (format === 'csv') {
+    const headers = ['Country','Region','Best Month','Why','Visa','Visa Type','Cost','Advisory','Month','Rank','Temp Low','Temp High','Conditions','Rainfall (mm)'];
+    const rows = data.flatMap(c => c.monthly.map(m => [
+      c.name, c.region, c.bestMonth, c.bestWhy, c.visa, c.visaType, c.cost, c.advisory,
+      m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || ''
+    ]));
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+    downloadFile(csv, 'travel-weather-export.csv', 'text/csv');
+  }
+  showToast(`Exported ${list.length} countries as ${format.toUpperCase()}`);
+}
+
+function exportCountry(countryName, format) {
+  const d = DATA.find(x => x.name === countryName);
+  if (!d) return;
+  
+  const data = {
+    name: d.name,
+    region: d.region,
+    bestMonth: d.best,
+    bestWhy: d.why,
+    visa: d.visa,
+    visaType: d.visaType,
+    cost: d.costRaw,
+    advisory: d.advisory,
+    monthly: d.m.map((m,i) => ({
+      month: MONTHS[i],
+      rank: d.r[i],
+      tempLow: m[0],
+      tempHigh: m[1],
+      conditions: m.conditions,
+      rainfall: d.p ? d.p[i] : null
+    })),
+    travelTypes: d.tt || []
+  };
+  
+  if (format === 'json') {
+    downloadFile(JSON.stringify(data, null, 2), `${countryName.replace(/\s+/g,'-')}.json`, 'application/json');
+  } else {
+    const headers = ['Country','Region','Best Month','Why','Visa','Visa Type','Cost','Advisory','Month','Rank','Temp Low','Temp High','Conditions','Rainfall (mm)'];
+    const rows = data.monthly.map(m => [
+      data.name, data.region, data.bestMonth, data.bestWhy, data.visa, data.visaType, data.cost, data.advisory,
+      m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || ''
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+    downloadFile(csv, `${countryName.replace(/\s+/g,'-')}.csv`, 'text/csv');
+  }
+  showToast(`Exported ${countryName} as ${format.toUpperCase()}`);
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], {type: mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function shareCurrentView() {
+  const state = {
+    q: S.q,
+    region: S.region,
+    month: S.month,
+    adv: S.adv,
+    sort: S.sort,
+    travelType: S.travelType,
+    unit: U,
+    weights: rankingWeights,
+    favorites: Array.from(favorites)
+  };
+  const encoded = btoa(JSON.stringify(state));
+  const url = `${window.location.origin}${window.location.pathname}?view=${encoded}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('Shareable link copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy this link:', url);
+  });
+}
+
+function shareCountry(countryName) {
+  const d = DATA.find(x => x.name === countryName);
+  if (!d) return;
+  const url = `${window.location.origin}${window.location.pathname}?country=${encodeURIComponent(countryName)}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast(`Share link for ${countryName} copied!`);
+  }).catch(() => {
+    prompt('Copy this link:', url);
+  });
+}
+
+function loadSharedView(encoded) {
+  try {
+    const state = JSON.parse(atob(encoded));
+    Object.assign(S, state);
+    U = state.unit || 'C';
+    rankingWeights = state.weights || rankingWeights;
+    favorites = new Set(state.favorites || []);
+    localStorage.setItem('tw-favorites', JSON.stringify(Array.from(favorites)));
+    localStorage.setItem('tw-ranking-weights', JSON.stringify(rankingWeights));
+    buildChips();
+    render();
+    updateRankingWeightInputs();
+    showToast('Shared view loaded!');
+  } catch(e) {
+    console.error('Failed to load shared view:', e);
+    showToast('Failed to load shared view');
+  }
+}
+
+function loadSharedCountry(countryName) {
+  const d = DATA.find(x => x.name === countryName);
+  if (d) {
+    const cardEl = document.querySelector(`.card[data-name="${esc(countryName)}"]`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!cardEl.classList.contains('open')) {
+        cardEl.classList.add('open');
+        open.add(normKey(countryName));
+        render();
+      }
+    }
+    showToast(`Loaded ${countryName}`);
+  }
+}
+
+// ============ FAVORITES ============
+function toggleFavorite(countryName) {
+  const key = normKey(countryName);
+  if (favorites.has(key)) {
+    favorites.delete(key);
+    showToast(`Removed ${countryName} from favorites`);
+  } else {
+    favorites.add(key);
+    showToast(`Added ${countryName} to favorites`);
+  }
+  localStorage.setItem('tw-favorites', JSON.stringify(Array.from(favorites)));
+  render();
+}
+
+// ============ RANKING WEIGHTS ============
+function updateRankingWeightInputs() {
+  $('#w-temp').value = rankingWeights.temp;
+  $('#w-rain').value = rankingWeights.rain;
+  $('#w-humid').value = rankingWeights.humid;
+  $('#w-hazard').value = rankingWeights.hazard;
+  $('#w-crowd').value = rankingWeights.crowd;
+  $('#w-temp-val').textContent = `${rankingWeights.temp}%`;
+  $('#w-rain-val').textContent = `${rankingWeights.rain}%`;
+  $('#w-humid-val').textContent = `${rankingWeights.humid}%`;
+  $('#w-hazard-val').textContent = `${rankingWeights.hazard}%`;
+  $('#w-crowd-val').textContent = `${rankingWeights.crowd}%`;
+}
+
+function saveRankingWeights() {
+  localStorage.setItem('tw-ranking-weights', JSON.stringify(rankingWeights));
+  if (S.sort === 'ranking') render();
+}
+
+function resetRankingWeights() {
+  rankingWeights = {temp:30, rain:25, humid:15, hazard:20, crowd:10};
+  saveRankingWeights();
+  updateRankingWeightInputs();
+  showToast('Ranking weights reset to defaults');
+}
+
+// ============ TOAST ============
+function showToast(message) {
+  const container = $('#toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideIn .3s ease reverse';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ============ EVENT LISTENERS ============
 $("#q").addEventListener("input", e => { S.q = e.target.value; render(); });
 $("#month").addEventListener("change", e => { 
   S.month = +e.target.value; 
@@ -525,18 +1098,81 @@ $("#chips").addEventListener("click", e => {
   buildChips();
   render();
 });
+$("#travel-type-chips").addEventListener("click", e => {
+  const c = e.target.closest(".travel-type-chip");
+  if (!c) return;
+  S.travelType = c.dataset.type;
+  buildTravelTypeChips();
+  render();
+});
 $("#list").addEventListener("click", e => {
+  // Card toggle
   const cardEl = e.target.closest(".card");
-  if (!cardEl || !cardEl.dataset.name) return;
-  const k = normKey(cardEl.dataset.name);
-  if (open.has(k)) { open.delete(k); } else { open.add(k); }
-  cardEl.classList.toggle("open", open.has(k));
+  if (cardEl && !e.target.closest('.fav-btn') && !e.target.closest('.export-dropdown')) {
+    if (!e.target.closest('.head')) return; // Only toggle on header click
+    const k = normKey(cardEl.dataset.name);
+    if (open.has(k)) { open.delete(k); } else { open.add(k); }
+    cardEl.classList.toggle("open", open.has(k));
+    // Render chart when opened
+    if (open.has(k)) {
+      const d = DATA.find(x => normKey(x.name) === k);
+      if (d && d.p) {
+        setTimeout(() => {
+          const canvas = document.getElementById(`precip-chart-${k}`);
+          if (canvas) renderPrecipChart(canvas, d);
+        }, 100);
+      }
+    }
+  }
+  // Favorite button
+  const favBtn = e.target.closest('.fav-btn');
+  if (favBtn) {
+    e.stopPropagation();
+    toggleFavorite(favBtn.dataset.country);
+  }
+  // Export dropdown items
+  const exportItem = e.target.closest('.export-item');
+  if (exportItem) {
+    e.stopPropagation();
+    const action = exportItem.dataset.action;
+    const country = exportItem.dataset.country;
+    if (action === 'export-json') exportData('json');
+    else if (action === 'export-csv') exportData('csv');
+    else if (action === 'share-url') shareCurrentView();
+    else if (action === 'export-country-json') exportCountry(country, 'json');
+    else if (action === 'export-country-csv') exportCountry(country, 'csv');
+    else if (action === 'share-country') shareCountry(country);
+  }
 });
 
-// Initialize everything
-buildChips();
-render();
-initMap();
+// Ranking weight sliders
+['temp','rain','humid','hazard','crowd'].forEach(key => {
+  $(`#w-${key}`).addEventListener('input', e => {
+    rankingWeights[key] = parseInt(e.target.value);
+    $(`#w-${key}-val`).textContent = `${rankingWeights[key]}%`;
+  });
+  $(`#w-${key}`).addEventListener('change', () => {
+    saveRankingWeights();
+  });
+});
+$('#reset-weights').addEventListener('click', resetRankingWeights);
+
+// Check for shared view or country in URL
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('view')) {
+    loadSharedView(params.get('view'));
+  } else if (params.has('country')) {
+    // Wait for render then load country
+    setTimeout(() => loadSharedCountry(params.get('country')), 500);
+  } else {
+    // Normal init
+    buildChips();
+    render();
+    initMap();
+    updateRankingWeightInputs();
+  }
+})();
 </script>
 </body>
 </html>
