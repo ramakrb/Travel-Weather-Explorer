@@ -582,10 +582,23 @@ function initMap() {
   
   map = L.map('map', { keyboard: true }).setView([20, 0], 2);
   
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-    maxZoom: 19
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    tileSize: 256
   }).addTo(map);
+  
+  // Handle tile load errors (common on file:// protocol)
+  map.on('tileerror', (e) => {
+    console.warn('Map tile failed to load:', e.tile.src);
+    if (!document.getElementById('map-notice')) {
+      const notice = document.createElement('div');
+      notice.id = 'map-notice';
+      notice.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:white;padding:12px 20px;border-radius:8px;font-size:13px;z-index:1000;max-width:90%;text-align:center;';
+      notice.innerHTML = '🗺️ <strong>Map tiles unavailable</strong><br>OpenStreetMap blocks <code>file://</code> requests.<br>Deploy to HTTPS (GitHub Pages/Netlify) for full map.';
+      map.getContainer().appendChild(notice);
+    }
+  });
   
   fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
     .then(r => r.json())
@@ -866,8 +879,16 @@ function render() {
 function renderPrecipChart(canvas, d) {
   if (precipCharts.has(canvas.id)) precipCharts.get(canvas.id).destroy();
   
-  const ctx = canvas.getContext('2d');
-  const chart = new Chart(ctx, {
+  // Check if Chart.js is available
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded, skipping precipitation chart');
+    canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--muted);font-size:12px;">📊 Chart.js not available (CORS on file://). Deploy to HTTPS for charts.</p>';
+    return;
+  }
+  
+  try {
+    const ctx = canvas.getContext('2d');
+    const chart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: MABBR,
@@ -912,6 +933,10 @@ function renderPrecipChart(canvas, d) {
     }
   });
   precipCharts.set(canvas.id, chart);
+} catch (err) {
+  console.error('Precipitation chart error:', err);
+  canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--muted);font-size:12px;">📊 Chart failed to render. Deploy to HTTPS for charts.</p>';
+}
 }
 
 function highlightCountriesOnMap(list) {
