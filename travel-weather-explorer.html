@@ -3,7 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Travel Weather Explorer - Find the best month to visit 172 destinations worldwide with interactive maps, weather rankings, precipitation data, and travel type filters.">
+<meta name="theme-color" content="#0284c7">
 <title>Travel Weather Explorer — 172 destinations, month by month</title>
+<!-- PWA Manifest -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Travel Weather">
+<link rel="apple-touch-icon" href="icon-192.png">
 <!-- Bootstrap 5 CSS for responsive design -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <!-- Leaflet CSS for interactive map -->
@@ -25,6 +33,7 @@
   --l2bg: #fef3c7;
   --fav: #e11d48;
   --fav-bg: #fef2f2;
+  --focus: #0284c7;
 }
 * { box-sizing: border-box }
 body {
@@ -54,7 +63,7 @@ input, select, button { font: inherit; }
   font-size: 15px;
   outline: none;
 }
-#q:focus { border-color: var(--accent); }
+#q:focus, #q:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(2,132,199,0.3); }
 .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .row2 select {
   padding: 8px 10px;
@@ -74,6 +83,7 @@ input, select, button { font: inherit; }
   font-size: 14px;
 }
 #unit:hover { border-color: var(--accent); }
+#unit:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,0.3); }
 .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
 .chip {
   padding: 5px 11px;
@@ -84,7 +94,10 @@ input, select, button { font: inherit; }
   font-size: 13px;
   cursor: pointer;
   user-select: none;
+  transition: all .15s;
 }
+.chip:hover { border-color: var(--accent); }
+.chip:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,0.3); }
 .chip.on { background: #0284c7; border-color: #0284c7; color: #fff; }
 .meta { margin-top: 10px; font-size: 13px; color: #94a3b8; }
 .meta b { color: #e2e8f0; }
@@ -192,6 +205,7 @@ footer b { color: #e2e8f0; }
   transition: all .15s;
 }
 .travel-type-chip:hover { border-color: var(--accent); color: var(--accent); }
+.travel-type-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,0.3); }
 .travel-type-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* Favorite button */
@@ -208,6 +222,7 @@ footer b { color: #e2e8f0; }
   justify-content: center;
 }
 .fav-btn:hover { background: var(--fav-bg); color: var(--fav); }
+.fav-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(225,29,72,0.3); }
 .fav-btn.active { color: var(--fav); }
 .fav-btn.active:hover { background: var(--fav-bg); }
 
@@ -226,6 +241,7 @@ footer b { color: #e2e8f0; }
   gap: 6px;
 }
 .export-btn:hover { border-color: var(--accent); }
+.export-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,0.3); }
 .export-menu {
   display: none;
   position: absolute;
@@ -253,6 +269,7 @@ footer b { color: #e2e8f0; }
   transition: background .15s;
 }
 .export-item:hover { background: var(--bg); }
+.export-item:focus-visible { outline: none; background: var(--bg); }
 .export-item:not(:last-child) { border-bottom: 1px solid var(--line); }
 
 /* Ranking methodology panel */
@@ -263,11 +280,39 @@ footer b { color: #e2e8f0; }
   padding: 16px;
   margin-bottom: 20px;
 }
-.ranking-panel summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.ranking-panel summary { cursor: pointer; font-weight: 600; font-size: 14px; list-style: none; }
+.ranking-panel summary::-webkit-details-marker { display: none; }
+.ranking-panel summary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,0.3); border-radius: 4px; }
 .ranking-weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
 .weight-control { display: flex; flex-direction: column; gap: 4px; }
 .weight-label { display: flex; justify-content: space-between; font-size: 12px; }
 .weight-slider { width: 100%; }
+.weight-slider:focus-visible { outline: none; }
+
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  background: var(--accent);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+}
+.skip-link:focus { top: 16px; }
+
+/* Loading states */
+.loading { opacity: 0.6; pointer-events: none; }
+.skeleton { background: linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Toast notification */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+.toast { background: #1e293b; color: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.2); animation: slideIn .3s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 
 /* Responsive adjustments */
 @media (max-width: 860px) {
@@ -288,6 +333,7 @@ footer b { color: #e2e8f0; }
   .card.open .body { display: block; }
   #map-container { display: none; }
   .export-dropdown, .fav-btn, .ranking-panel { display: none; }
+  .skip-link { display: none; }
 }
 
 /* Bootstrap override for dark header inputs */
@@ -304,22 +350,33 @@ header .form-control:focus, header .form-select:focus {
 }
 header .form-control::placeholder { color: #94a3b8; }
 
-/* Toast notification */
-.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-.toast { background: #1e293b; color: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.2); animation: slideIn .3s ease; }
-@keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root { --accent: #0060a0; --line: #000; --muted: #333; }
+  .card { border-width: 2px; }
+  .chip, .travel-type-chip { border-width: 2px; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 </style>
 </head>
 <body>
+<a href="#list-section" class="skip-link">Skip to country list</a>
 <header><div class="wrap">
   <h1>Travel Weather Explorer</h1>
   <p class="sub">Every destination on your list · monthly weather with typical temps · all 12 months ranked best-to-worst for weather + crowds · advisories, visas and costs from your workbook</p>
   
-  <div class="row g-2 mb-3">
+  <div class="row g-2 mb-3" role="search" aria-label="Travel filters">
     <div class="col-12 col-md-5">
-      <input id="q" type="search" class="form-control" autocomplete="off" placeholder="Search — country, visa, notes, weather…  e.g. "diving", "visa-free", "typhoon", "whales"">
+      <label for="q" class="visually-hidden">Search destinations</label>
+      <input id="q" type="search" class="form-control" autocomplete="off" placeholder="Search — country, visa, notes, weather…  e.g. "diving", "visa-free", "typhoon", "whales"" aria-describedby="search-help">
+      <div id="search-help" class="visually-hidden">Type to filter countries by name, region, visa, weather, or travel type</div>
     </div>
     <div class="col-12 col-md-4">
+      <label for="month" class="visually-hidden">Best month filter</label>
       <select id="month" class="form-select" title="Ask: where is best in this month?">
         <option value="0">Any month — full-year view</option>
         <option value="1">Best in January</option><option value="2">Best in February</option>
@@ -331,6 +388,7 @@ header .form-control::placeholder { color: #94a3b8; }
       </select>
     </div>
     <div class="col-12 col-md-3">
+      <label for="adv" class="visually-hidden">Advisory level filter</label>
       <select id="adv" class="form-select" title="Filter by advisory level">
         <option value="All">All advisory levels</option>
         <option value="1">Level 1 only</option>
@@ -338,6 +396,7 @@ header .form-control::placeholder { color: #94a3b8; }
       </select>
     </div>
     <div class="col-12 col-md-3">
+      <label for="sort" class="visually-hidden">Sort results</label>
       <select id="sort" class="form-select" title="Sort results">
         <option value="az">Sort: Name A–Z</option>
         <option value="region">Sort: Region</option>
@@ -348,23 +407,23 @@ header .form-control::placeholder { color: #94a3b8; }
       </select>
     </div>
     <div class="col-12 col-md-2">
-      <button id="unit" class="btn btn-outline-light w-100" title="Switch temperature units">°C ⇄ °F</button>
+      <button id="unit" class="btn btn-outline-light w-100" title="Switch temperature units" aria-label="Toggle temperature units between Celsius and Fahrenheit">°C ⇄ °F</button>
     </div>
     <div class="col-12 col-md-2">
-      <div class="export-dropdown">
-        <button class="export-btn w-100" title="Export options">📤 Export</button>
-        <div class="export-menu">
-          <div class="export-item" data-action="export-json">📄 Download JSON</div>
-          <div class="export-item" data-action="export-csv">📊 Download CSV</div>
-          <div class="export-item" data-action="share-url">🔗 Copy Shareable Link</div>
+      <div class="export-dropdown" role="menu" aria-label="Export options">
+        <button class="export-btn w-100" title="Export options" aria-haspopup="true" aria-expanded="false">📤 Export</button>
+        <div class="export-menu" role="menu">
+          <div class="export-item" data-action="export-json" role="menuitem">📄 Download JSON</div>
+          <div class="export-item" data-action="export-csv" role="menuitem">📊 Download CSV</div>
+          <div class="export-item" data-action="share-url" role="menuitem">🔗 Copy Shareable Link</div>
         </div>
       </div>
     </div>
   </div>
   
-  <div class="chips" id="chips"></div>
-  <div class="chips" id="travel-type-chips"></div>
-  <div class="meta" id="meta"></div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by region"></div>
+  <div class="chips" id="travel-type-chips" role="group" aria-label="Filter by travel type"></div>
+  <div class="meta" id="meta" aria-live="polite"></div>
 </div></header>
 
 <main>
@@ -376,38 +435,39 @@ header .form-control::placeholder { color: #94a3b8; }
     <div class="ranking-weights">
       <div class="weight-control">
         <div class="weight-label"><span>Temperature Comfort</span><span id="w-temp-val">30%</span></div>
-        <input type="range" class="weight-slider form-range" id="w-temp" min="0" max="100" value="30">
+        <input type="range" class="weight-slider form-range" id="w-temp" min="0" max="100" value="30" aria-label="Temperature comfort weight">
       </div>
       <div class="weight-control">
         <div class="weight-label"><span>Low Rainfall</span><span id="w-rain-val">25%</span></div>
-        <input type="range" class="weight-slider form-range" id="w-rain" min="0" max="100" value="25">
+        <input type="range" class="weight-slider form-range" id="w-rain" min="0" max="100" value="25" aria-label="Low rainfall weight">
       </div>
       <div class="weight-control">
         <div class="weight-label"><span>Low Humidity</span><span id="w-humid-val">15%</span></div>
-        <input type="range" class="weight-slider form-range" id="w-humid" min="0" max="100" value="15">
+        <input type="range" class="weight-slider form-range" id="w-humid" min="0" max="100" value="15" aria-label="Low humidity weight">
       </div>
       <div class="weight-control">
         <div class="weight-label"><span>Avoid Hazards</span><span id="w-hazard-val">20%</span></div>
-        <input type="range" class="weight-slider form-range" id="w-hazard" min="0" max="100" value="20">
+        <input type="range" class="weight-slider form-range" id="w-hazard" min="0" max="100" value="20" aria-label="Avoid hazards weight">
       </div>
       <div class="weight-control">
         <div class="weight-label"><span>Low Crowds/Cost</span><span id="w-crowd-val">10%</span></div>
-        <input type="range" class="weight-slider form-range" id="w-crowd" min="0" max="100" value="10">
+        <input type="range" class="weight-slider form-range" id="w-crowd" min="0" max="100" value="10" aria-label="Low crowds cost weight">
       </div>
     </div>
-    <button class="btn btn-sm btn-outline-primary mt-2" id="reset-weights">Reset to Defaults</button>
+    <button class="btn btn-sm btn-outline-primary mt-2" id="reset-weights" aria-label="Reset ranking weights to defaults">Reset to Defaults</button>
   </details>
 
   <!-- Interactive Map Section -->
-  <section id="map-section" class="mb-4">
-    <h2 class="h5 mb-2">Interactive World Map</h2>
+  <section id="map-section" class="mb-4" aria-labelledby="map-title">
+    <h2 id="map-title" class="h5 mb-2">Interactive World Map</h2>
     <p class="text-muted small mb-2">Click a country to see its best month and climate summary. Use the filters above to narrow results.</p>
-    <div id="map-container"><div id="map"></div></div>
+    <div id="map-container" role="application" aria-label="World map showing travel destinations"><div id="map"></div></div>
   </section>
 
   <!-- Country List Section -->
-  <section id="list-section">
-    <div id="list"></div>
+  <section id="list-section" aria-labelledby="list-title">
+    <h2 id="list-title" class="visually-hidden">Country List</h2>
+    <div id="list" role="list" aria-label="Travel destinations"></div>
   </section>
 </div>
 </main>
@@ -426,7 +486,7 @@ header .form-control::placeholder { color: #94a3b8; }
 </div></footer>
 
 <!-- Toast container for notifications -->
-<div class="toast-container" id="toast-container"></div>
+<div class="toast-container" id="toast-container" aria-live="polite" aria-label="Notifications"></div>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -436,6 +496,26 @@ header .form-control::placeholder { color: #94a3b8; }
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDf" crossorigin="anonymous"></script>
 
 <script>
+// ============ PERFORMANCE UTILITIES ============
+function debounce(fn, delay) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+function throttle(fn, limit) {
+  let inThrottle;
+  return (...args) => {
+    if (!inThrottle) {
+      fn.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
 // ============ COUNTRY DATA WITH PRECIPITATION & TRAVEL TYPES ============
 // Precipitation (p): average monthly rainfall in mm (approximate climate normals)
 // Travel Types (tt): array of tags - adventure, family, budget, beach, culture, nature, food, luxury
@@ -484,7 +564,6 @@ const TRAVEL_TYPES = {
 
 const DATA = window.TWDATA.map(d => {
   d._hay = [d.name,d.region,d.advisory,d.best,d.why,d.visa,d.howto,d.notes,d.visaLabel].concat(d.m.map(m => MONTHS[d.m.indexOf(m)]+" "+m[2])).join(" ").toLowerCase();
-  // Add travel types to search haystack
   if (d.tt) d._hay += " " + d.tt.join(" ");
   return d;
 });
@@ -502,24 +581,21 @@ const normKey = s => s.toLowerCase().replace(/\s+/g," ");
 let favorites = new Set(JSON.parse(localStorage.getItem('tw-favorites') || '[]'));
 
 // Ranking weights (default)
-let rankingWeights = {
-  temp: 30, rain: 25, humid: 15, hazard: 20, crowd: 10
-};
-// Load saved weights
-try {
-  const saved = JSON.parse(localStorage.getItem('tw-ranking-weights'));
-  if (saved) rankingWeights = saved;
-} catch(e) {}
+let rankingWeights = {temp: 30, rain: 25, humid: 15, hazard: 20, crowd: 10};
+try { const saved = JSON.parse(localStorage.getItem('tw-ranking-weights')); if (saved) rankingWeights = saved; } catch(e) {}
 
 // Chart instances storage
 const precipCharts = new Map();
 
 // Map variables
-let map, geoJsonLayer, countryLayers = {};
+let map, geoJsonLayer, countryLayers = {}, mapLoaded = false;
 
 // ============ INITIALIZATION ============
 function initMap() {
-  map = L.map('map').setView([20, 0], 2);
+  if (mapLoaded) return;
+  mapLoaded = true;
+  
+  map = L.map('map', { keyboard: true }).setView([20, 0], 2);
   
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -547,6 +623,11 @@ function initMap() {
       });
       
       map.fitBounds(geoJsonLayer.getBounds(), { padding: [20, 20] });
+      
+      // Make map focusable for keyboard navigation
+      map.getContainer().setAttribute('tabindex', '0');
+      map.getContainer().setAttribute('role', 'application');
+      map.getContainer().setAttribute('aria-label', 'Interactive world map');
     })
     .catch(err => console.error('Failed to load country GeoJSON:', err));
 }
@@ -567,7 +648,7 @@ function onEachCountry(feature, layer) {
       <div style="min-width: 220px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <strong>${esc(countryName)}</strong>
-          <button class="fav-btn ${isFav?'active':''}" data-country="${esc(countryName)}" style="padding:2px;">
+          <button class="fav-btn ${isFav?'active':''}" data-country="${esc(countryName)}" style="padding:2px;" aria-label="${isFav?'Remove from favorites':'Add to favorites'} ${esc(countryName)}">
             ${isFav ? '❤️' : '🤍'}
           </button>
         </div>
@@ -589,9 +670,7 @@ function onEachCountry(feature, layer) {
         layer.setStyle({ weight: 2, color: '#0284c7', fillOpacity: 0.5 });
         if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) layer.bringToFront();
       },
-      mouseout: e => {
-        geoJsonLayer.resetStyle(e.target);
-      },
+      mouseout: e => geoJsonLayer.resetStyle(e.target),
       click: e => {
         const cardEl = document.querySelector(`.card[data-name="${esc(countryName)}"]`);
         if (cardEl) {
@@ -599,8 +678,13 @@ function onEachCountry(feature, layer) {
           if (!cardEl.classList.contains('open')) {
             cardEl.classList.add('open');
             open.add(normKey(countryName));
-            render(); // re-render to show open state
+            render();
           }
+          // Focus the card header for accessibility
+          setTimeout(() => {
+            const head = cardEl.querySelector('.head');
+            if (head) head.focus();
+          }, 300);
         }
       }
     });
@@ -614,28 +698,27 @@ function buildChips() {
   const counts = {};
   DATA.forEach(d => counts[d.region] = (counts[d.region] || 0) + 1);
   const regions = Object.keys(counts).sort();
-  let h = `<span class="chip ${S.region==="All"?"on":""}" data-region="All">All (${DATA.length})</span>`;
+  let h = `<span class="chip ${S.region==="All"?"on":""}" data-region="All" role="button" tabindex="0" aria-pressed="${S.region==='All'}">All (${DATA.length})</span>`;
   regions.forEach(r => {
-    h += `<span class="chip ${S.region===r?"on":""}" data-region="${esc(r)}">${esc(r)} (${counts[r]})</span>`;
+    h += `<span class="chip ${S.region===r?"on":""}" data-region="${esc(r)}" role="button" tabindex="0" aria-pressed="${S.region===r}">${esc(r)} (${counts[r]})</span>`;
   });
   $("#chips").innerHTML = h;
 }
 
 function buildTravelTypeChips() {
-  // Collect all travel types from filtered data
   const list = filtered();
   const typeCounts = {};
-  list.forEach(d => {
-    if (d.tt) d.tt.forEach(t => typeCounts[t] = (typeCounts[t] || 0) + 1);
-  });
+  list.forEach(d => { if (d.tt) d.tt.forEach(t => typeCounts[t] = (typeCounts[t] || 0) + 1); });
   const types = Object.keys(typeCounts).sort();
-  let h = `<span class="travel-type-chip ${S.travelType==="All"?"on":""}" data-type="All">All Types</span>`;
+  let h = `<span class="travel-type-chip ${S.travelType==="All"?"on":""}" data-type="All" role="button" tabindex="0" aria-pressed="${S.travelType==='All'}">All Types</span>`;
   types.forEach(t => {
     const info = TRAVEL_TYPES[t] || {label:t, color:var(--accent)};
-    h += `<span class="travel-type-chip ${S.travelType===t?"on":""}" data-type="${esc(t)}" style="border-color:${info.color};${S.travelType===t?'background:'+info.color+';color:white;':''}">${info.label} (${typeCounts[t]})</span>`;
+    h += `<span class="travel-type-chip ${S.travelType===t?"on":""}" data-type="${esc(t)}" role="button" tabindex="0" aria-pressed="${S.travelType===t}" style="border-color:${info.color};${S.travelType===t?'background:'+info.color+';color:white;':''}">${info.label} (${typeCounts[t]})</span>`;
   });
   $("#travel-type-chips").innerHTML = h;
 }
+
+const debouncedFilter = debounce(() => render(), 150);
 
 function filtered() {
   const toks = S.q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -665,14 +748,10 @@ function filtered() {
 }
 
 function computeCustomRank(d) {
-  // Higher score = better
   const w = rankingWeights;
   let score = 0;
   d.r.forEach((rank, i) => {
-    // Base score from rank (1=best, 12=worst)
     const rankScore = (13 - rank) / 12 * 100;
-    
-    // Temperature comfort (prefer 20-28°C)
     const m = d.m[i];
     const tLow = parseInt(m[0]), tHigh = parseInt(m[1]);
     const tAvg = (tLow + tHigh) / 2;
@@ -682,26 +761,21 @@ function computeCustomRank(d) {
     else if (tAvg >= 10 && tAvg <= 35) tempScore = 40;
     else tempScore = 10;
     
-    // Rainfall (lower is better)
     const precip = d.p ? d.p[i] : 100;
-    let rainScore = Math.max(0, 100 - precip / 2); // 0mm=100, 200mm=0
+    let rainScore = Math.max(0, 100 - precip / 2);
     
-    // Humidity proxy from notes (simplified)
     const note = m[2].toLowerCase();
     let humidScore = 50;
     if (note.includes('dry')) humidScore = 90;
     else if (note.includes('humid')) humidScore = 30;
     else if (note.includes('pleasant') || note.includes('mild')) humidScore = 80;
     
-    // Hazards (simplified from notes)
     let hazardScore = 90;
     if (note.includes('cyclone') || note.includes('hurricane') || note.includes('typhoon') || note.includes('extreme heat')) hazardScore = 20;
     else if (note.includes('storm') || note.includes('rainy season')) hazardScore = 50;
     
-    // Crowds/cost (rank 1-2 = peak, 11-12 = low)
     let crowdScore = rank <= 2 ? 30 : rank <= 4 ? 50 : rank <= 8 ? 70 : 90;
     
-    // Weighted combination
     const monthScore = (
       tempScore * w.temp +
       rainScore * w.rain +
@@ -712,7 +786,7 @@ function computeCustomRank(d) {
     
     score += monthScore;
   });
-  return score / 12; // Average across months
+  return score / 12;
 }
 
 // ============ CARD RENDERING ============
@@ -741,46 +815,43 @@ function card(d) {
   const adv = `<div class="box"><h3>Advisory (US State Dept)</h3><p>${esc(d.advisory)} · issued ${esc(d.issued)}</p></div>`;
   const notes = `<div class="box"><h3>Notes</h3><p>${esc(d.notes)}</p></div>`;
   
-  // Travel type badges
   const travelTypeBadges = d.tt ? d.tt.map(t => {
     const info = TRAVEL_TYPES[t];
     return `<span class="badge" style="background:${info.color}20;color:${info.color};border:1px solid ${info.color}40;font-size:10px;padding:2px 6px;">${info.label}</span>`;
   }).join(' ') : '';
   
-  // Precipitation chart canvas
   const chartId = `precip-chart-${key}`;
   
-  // Export dropdown for card
   const cardExport = `
     <div class="export-dropdown">
-      <button class="export-btn btn btn-sm btn-outline-secondary" title="Export this country">📤</button>
-      <div class="export-menu">
-        <div class="export-item" data-action="export-country-json" data-country="${esc(d.name)}">📄 JSON</div>
-        <div class="export-item" data-action="export-country-csv" data-country="${esc(d.name)}">📊 CSV</div>
-        <div class="export-item" data-action="share-country" data-country="${esc(d.name)}">🔗 Share Link</div>
+      <button class="export-btn btn btn-sm btn-outline-secondary" title="Export this country" aria-haspopup="true" aria-expanded="false">📤</button>
+      <div class="export-menu" role="menu">
+        <div class="export-item" data-action="export-country-json" data-country="${esc(d.name)}" role="menuitem">📄 JSON</div>
+        <div class="export-item" data-action="export-country-csv" data-country="${esc(d.name)}" role="menuitem">📊 CSV</div>
+        <div class="export-item" data-action="share-country" data-country="${esc(d.name)}" role="menuitem">🔗 Share Link</div>
       </div>
     </div>
   `;
   
-  return `<section class="card ${isOpen?"open":""}" data-name="${esc(d.name)}">
-  <div class="head"><div class="head-main">
+  return `<section class="card ${isOpen?"open":""}" data-name="${esc(d.name)}" role="listitem">
+  <div class="head" tabindex="0" role="button" aria-expanded="${isOpen}" aria-controls="card-body-${key}" aria-label="Toggle details for ${esc(d.name)}"><div class="head-main">
     <div class="title-row"><h2>${esc(d.name)}</h2><span class="regionchip">${esc(d.region)}</span></div>
     <div class="badges">
       <span class="badge l${d.level}" title="${esc(d.advisory)}">Level ${d.level}</span>
       <span class="badge v-${d.visaType}" title="${esc(d.visa)}">${d.visaLabel}</span>
       ${badge}
       <span class="cost">${cost(d)}</span>
-      <button class="fav-btn ${isFav?'active':''}" data-country="${esc(d.name)}" title="${isFav?'Remove from favorites':'Add to favorites'}">${isFav?'❤️':'🤍'}</button>
+      <button class="fav-btn ${isFav?'active':''}" data-country="${esc(d.name)}" title="${isFav?'Remove from favorites':'Add to favorites'}" aria-label="${isFav?'Remove from favorites':'Add to favorites'} ${esc(d.name)}" aria-pressed="${isFav}">${isFav?'❤️':'🤍'}</button>
       ${cardExport}
     </div>
-  </div><div class="chev">▾</div></div>
-  <div class="body">
+  </div><div class="chev" aria-hidden="true">▾</div></div>
+  <div class="body" id="card-body-${key}" role="region" aria-label="${esc(d.name)} details">
     ${travelTypeBadges ? `<div class="travel-type-chips">${travelTypeBadges}</div>` : ''}
-    <div class="monthstrip">${d.m.map((m,i) => monthCell(d,i)).join("")}</div>
-    <div class="bars">${bars}</div>
-    <div class="legend">${legend}</div>
+    <div class="monthstrip" role="table" aria-label="Monthly weather">${d.m.map((m,i) => monthCell(d,i)).join("")}</div>
+    <div class="bars" role="img" aria-label="Monthly rank bars">${bars}</div>
+    <div class="legend" aria-label="Rank legend">${legend}</div>
     <p class="rankline">Months ranked 1–12 by weather <i>and</i> crowds; #1 is the best of the year. Temperatures are typical ranges for main tourist areas. 💧 = avg monthly rainfall (mm).</p>
-    <div class="precip-chart-container"><canvas id="${chartId}"></canvas></div>
+    <div class="precip-chart-container" aria-label="Precipitation chart"><canvas id="${chartId}" role="img" aria-label="Monthly rainfall chart"></canvas></div>
     <div class="grid">${bestLine}${entry}${adv}${notes}</div>
   </div></section>`;
 }
@@ -789,16 +860,13 @@ function render() {
   const list = filtered();
   const mline = S.month ? ` · ranked for <b>${MONTHS[S.month-1]}</b> (weather + crowds, #1 best)` : "";
   $("#meta").innerHTML = `Showing <b>${list.length}</b> of <b>${DATA.length}</b> destinations${mline}${U==="C"?" · °C":" · °F"}`;
-  $("#list").innerHTML = list.length ? list.map(card).join("") : `<div class="card" style="padding:22px;text-align:center;color:var(--muted)">No destinations match. Try clearing the search or filters.</div>`;
+  $("#list").innerHTML = list.length ? list.map(card).join("") : `<div class="card" style="padding:22px;text-align:center;color:var(--muted)" role="status">No destinations match. Try clearing the search or filters.</div>`;
   
-  // Render precipitation charts for visible cards
   list.forEach(d => {
     const key = normKey(d.name);
     const chartId = `precip-chart-${key}`;
     const canvas = document.getElementById(chartId);
-    if (canvas && d.p) {
-      renderPrecipChart(canvas, d);
-    }
+    if (canvas && d.p) renderPrecipChart(canvas, d);
   });
   
   highlightCountriesOnMap(list);
@@ -807,10 +875,7 @@ function render() {
 }
 
 function renderPrecipChart(canvas, d) {
-  // Destroy existing chart if any
-  if (precipCharts.has(canvas.id)) {
-    precipCharts.get(canvas.id).destroy();
-  }
+  if (precipCharts.has(canvas.id)) precipCharts.get(canvas.id).destroy();
   
   const ctx = canvas.getContext('2d');
   const chart = new Chart(ctx, {
@@ -876,22 +941,9 @@ function highlightCountriesOnMap(list) {
 function exportData(format) {
   const list = filtered();
   const data = list.map(d => ({
-    name: d.name,
-    region: d.region,
-    bestMonth: d.best,
-    bestWhy: d.why,
-    visa: d.visa,
-    visaType: d.visaType,
-    cost: d.costRaw,
-    advisory: d.advisory,
-    monthly: d.m.map((m,i) => ({
-      month: MONTHS[i],
-      rank: d.r[i],
-      tempLow: m[0],
-      tempHigh: m[1],
-      conditions: m[2],
-      rainfall: d.p ? d.p[i] : null
-    })),
+    name: d.name, region: d.region, bestMonth: d.best, bestWhy: d.why,
+    visa: d.visa, visaType: d.visaType, cost: d.costRaw, advisory: d.advisory,
+    monthly: d.m.map((m,i) => ({ month: MONTHS[i], rank: d.r[i], tempLow: m[0], tempHigh: m[1], conditions: m[2], rainfall: d.p ? d.p[i] : null })),
     travelTypes: d.tt || []
   }));
   
@@ -899,10 +951,7 @@ function exportData(format) {
     downloadFile(JSON.stringify(data, null, 2), 'travel-weather-export.json', 'application/json');
   } else if (format === 'csv') {
     const headers = ['Country','Region','Best Month','Why','Visa','Visa Type','Cost','Advisory','Month','Rank','Temp Low','Temp High','Conditions','Rainfall (mm)'];
-    const rows = data.flatMap(c => c.monthly.map(m => [
-      c.name, c.region, c.bestMonth, c.bestWhy, c.visa, c.visaType, c.cost, c.advisory,
-      m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || ''
-    ]));
+    const rows = data.flatMap(c => c.monthly.map(m => [c.name, c.region, c.bestMonth, c.bestWhy, c.visa, c.visaType, c.cost, c.advisory, m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || '']));
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
     downloadFile(csv, 'travel-weather-export.csv', 'text/csv');
   }
@@ -913,34 +962,12 @@ function exportCountry(countryName, format) {
   const d = DATA.find(x => x.name === countryName);
   if (!d) return;
   
-  const data = {
-    name: d.name,
-    region: d.region,
-    bestMonth: d.best,
-    bestWhy: d.why,
-    visa: d.visa,
-    visaType: d.visaType,
-    cost: d.costRaw,
-    advisory: d.advisory,
-    monthly: d.m.map((m,i) => ({
-      month: MONTHS[i],
-      rank: d.r[i],
-      tempLow: m[0],
-      tempHigh: m[1],
-      conditions: m.conditions,
-      rainfall: d.p ? d.p[i] : null
-    })),
-    travelTypes: d.tt || []
-  };
+  const data = { name: d.name, region: d.region, bestMonth: d.best, bestWhy: d.why, visa: d.visa, visaType: d.visaType, cost: d.costRaw, advisory: d.advisory, monthly: d.m.map((m,i) => ({ month: MONTHS[i], rank: d.r[i], tempLow: m[0], tempHigh: m[1], conditions: m[2], rainfall: d.p ? d.p[i] : null })), travelTypes: d.tt || [] };
   
-  if (format === 'json') {
-    downloadFile(JSON.stringify(data, null, 2), `${countryName.replace(/\s+/g,'-')}.json`, 'application/json');
-  } else {
+  if (format === 'json') downloadFile(JSON.stringify(data, null, 2), `${countryName.replace(/\s+/g,'-')}.json`, 'application/json');
+  else {
     const headers = ['Country','Region','Best Month','Why','Visa','Visa Type','Cost','Advisory','Month','Rank','Temp Low','Temp High','Conditions','Rainfall (mm)'];
-    const rows = data.monthly.map(m => [
-      data.name, data.region, data.bestMonth, data.bestWhy, data.visa, data.visaType, data.cost, data.advisory,
-      m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || ''
-    ]);
+    const rows = data.monthly.map(m => [data.name, data.region, data.bestMonth, data.bestWhy, data.visa, data.visaType, data.cost, data.advisory, m.month, m.rank, m.tempLow, m.tempHigh, m.conditions, m.rainfall || '']);
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
     downloadFile(csv, `${countryName.replace(/\s+/g,'-')}.csv`, 'text/csv');
   }
@@ -951,44 +978,35 @@ function downloadFile(content, filename, mimeType) {
   const blob = new Blob([content], {type: mimeType});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 function shareCurrentView() {
-  const state = {
-    q: S.q,
-    region: S.region,
-    month: S.month,
-    adv: S.adv,
-    sort: S.sort,
-    travelType: S.travelType,
-    unit: U,
-    weights: rankingWeights,
-    favorites: Array.from(favorites)
-  };
+  const state = { q: S.q, region: S.region, month: S.month, adv: S.adv, sort: S.sort, travelType: S.travelType, unit: U, weights: rankingWeights, favorites: Array.from(favorites) };
   const encoded = btoa(JSON.stringify(state));
   const url = `${window.location.origin}${window.location.pathname}?view=${encoded}`;
-  navigator.clipboard.writeText(url).then(() => {
-    showToast('Shareable link copied to clipboard!');
-  }).catch(() => {
-    prompt('Copy this link:', url);
-  });
+  copyToClipboard(url, 'Shareable link copied to clipboard!');
 }
 
 function shareCountry(countryName) {
-  const d = DATA.find(x => x.name === countryName);
-  if (!d) return;
   const url = `${window.location.origin}${window.location.pathname}?country=${encodeURIComponent(countryName)}`;
-  navigator.clipboard.writeText(url).then(() => {
-    showToast(`Share link for ${countryName} copied!`);
-  }).catch(() => {
-    prompt('Copy this link:', url);
-  });
+  copyToClipboard(url, `Share link for ${countryName} copied!`);
+}
+
+function copyToClipboard(text, successMsg) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => fallbackCopy(text, successMsg));
+  } else fallbackCopy(text, successMsg);
+}
+
+function fallbackCopy(text, successMsg) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); showToast(successMsg); } catch(e) { prompt('Copy this link:', text); }
+  document.body.removeChild(ta);
 }
 
 function loadSharedView(encoded) {
@@ -1000,14 +1018,9 @@ function loadSharedView(encoded) {
     favorites = new Set(state.favorites || []);
     localStorage.setItem('tw-favorites', JSON.stringify(Array.from(favorites)));
     localStorage.setItem('tw-ranking-weights', JSON.stringify(rankingWeights));
-    buildChips();
-    render();
-    updateRankingWeightInputs();
+    buildChips(); render(); updateRankingWeightInputs();
     showToast('Shared view loaded!');
-  } catch(e) {
-    console.error('Failed to load shared view:', e);
-    showToast('Failed to load shared view');
-  }
+  } catch(e) { console.error('Failed to load shared view:', e); showToast('Failed to load shared view'); }
 }
 
 function loadSharedCountry(countryName) {
@@ -1016,11 +1029,7 @@ function loadSharedCountry(countryName) {
     const cardEl = document.querySelector(`.card[data-name="${esc(countryName)}"]`);
     if (cardEl) {
       cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (!cardEl.classList.contains('open')) {
-        cardEl.classList.add('open');
-        open.add(normKey(countryName));
-        render();
-      }
+      if (!cardEl.classList.contains('open')) { cardEl.classList.add('open'); open.add(normKey(countryName)); render(); }
     }
     showToast(`Loaded ${countryName}`);
   }
@@ -1029,13 +1038,8 @@ function loadSharedCountry(countryName) {
 // ============ FAVORITES ============
 function toggleFavorite(countryName) {
   const key = normKey(countryName);
-  if (favorites.has(key)) {
-    favorites.delete(key);
-    showToast(`Removed ${countryName} from favorites`);
-  } else {
-    favorites.add(key);
-    showToast(`Added ${countryName} to favorites`);
-  }
+  if (favorites.has(key)) { favorites.delete(key); showToast(`Removed ${countryName} from favorites`); }
+  else { favorites.add(key); showToast(`Added ${countryName} to favorites`); }
   localStorage.setItem('tw-favorites', JSON.stringify(Array.from(favorites)));
   render();
 }
@@ -1061,8 +1065,7 @@ function saveRankingWeights() {
 
 function resetRankingWeights() {
   rankingWeights = {temp:30, rain:25, humid:15, hazard:20, crowd:10};
-  saveRankingWeights();
-  updateRankingWeightInputs();
+  saveRankingWeights(); updateRankingWeightInputs();
   showToast('Ranking weights reset to defaults');
 }
 
@@ -1070,108 +1073,83 @@ function resetRankingWeights() {
 function showToast(message) {
   const container = $('#toast-container');
   const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = message;
+  toast.className = 'toast'; toast.textContent = message; toast.setAttribute('role', 'alert');
   container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.animation = 'slideIn .3s ease reverse';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  setTimeout(() => { toast.style.animation = 'slideIn .3s ease reverse'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
 // ============ EVENT LISTENERS ============
-$("#q").addEventListener("input", e => { S.q = e.target.value; render(); });
-$("#month").addEventListener("change", e => { 
-  S.month = +e.target.value; 
-  if (S.month) { S.sort = "month"; } 
-  else if (S.sort === "month") { S.sort = "az"; }
-  $("#sort").value = S.sort; 
-  render(); 
-});
+$("#q").addEventListener("input", debouncedFilter);
+$("#month").addEventListener("change", e => { S.month = +e.target.value; if (S.month) S.sort = "month"; else if (S.sort === "month") S.sort = "az"; $("#sort").value = S.sort; render(); });
 $("#adv").addEventListener("change", e => { S.adv = e.target.value; render(); });
 $("#sort").addEventListener("change", e => { S.sort = e.target.value; render(); });
 $("#unit").addEventListener("click", () => { U = U==="C"?"F":"C"; render(); });
-$("#chips").addEventListener("click", e => {
-  const c = e.target.closest(".chip");
-  if (!c) return;
-  S.region = c.dataset.region;
-  buildChips();
-  render();
-});
-$("#travel-type-chips").addEventListener("click", e => {
-  const c = e.target.closest(".travel-type-chip");
-  if (!c) return;
-  S.travelType = c.dataset.type;
-  buildTravelTypeChips();
-  render();
-});
+
+// Chip keyboards
+function setupChipKeyboard(containerId, onSelect) {
+  $(`#${containerId}`).addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.target.click(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); const next = e.target.nextElementSibling; if (next) next.focus(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); const prev = e.target.previousElementSibling; if (prev) prev.focus(); }
+  });
+  $(`#${containerId}`).addEventListener('click', e => { const c = e.target.closest('[data-region],[data-type]'); if (c) onSelect(c); });
+}
+
+setupChipKeyboard('chips', c => { S.region = c.dataset.region; buildChips(); render(); });
+setupChipKeyboard('travel-type-chips', c => { S.travelType = c.dataset.type; buildTravelTypeChips(); render(); });
+
 $("#list").addEventListener("click", e => {
-  // Card toggle
   const cardEl = e.target.closest(".card");
   if (cardEl && !e.target.closest('.fav-btn') && !e.target.closest('.export-dropdown')) {
-    if (!e.target.closest('.head')) return; // Only toggle on header click
+    if (!e.target.closest('.head')) return;
     const k = normKey(cardEl.dataset.name);
     if (open.has(k)) { open.delete(k); } else { open.add(k); }
     cardEl.classList.toggle("open", open.has(k));
-    // Render chart when opened
+    const head = cardEl.querySelector('.head');
+    if (head) head.setAttribute('aria-expanded', open.has(k));
     if (open.has(k)) {
       const d = DATA.find(x => normKey(x.name) === k);
-      if (d && d.p) {
-        setTimeout(() => {
-          const canvas = document.getElementById(`precip-chart-${k}`);
-          if (canvas) renderPrecipChart(canvas, d);
-        }, 100);
-      }
+      if (d && d.p) setTimeout(() => { const canvas = document.getElementById(`precip-chart-${k}`); if (canvas) renderPrecipChart(canvas, d); }, 100);
     }
   }
-  // Favorite button
-  const favBtn = e.target.closest('.fav-btn');
-  if (favBtn) {
-    e.stopPropagation();
-    toggleFavorite(favBtn.dataset.country);
-  }
-  // Export dropdown items
-  const exportItem = e.target.closest('.export-item');
-  if (exportItem) {
-    e.stopPropagation();
-    const action = exportItem.dataset.action;
-    const country = exportItem.dataset.country;
-    if (action === 'export-json') exportData('json');
-    else if (action === 'export-csv') exportData('csv');
-    else if (action === 'share-url') shareCurrentView();
-    else if (action === 'export-country-json') exportCountry(country, 'json');
-    else if (action === 'export-country-csv') exportCountry(country, 'csv');
-    else if (action === 'share-country') shareCountry(country);
+  const favBtn = e.target.closest('.fav-btn'); if (favBtn) { e.stopPropagation(); toggleFavorite(favBtn.dataset.country); }
+  const exportItem = e.target.closest('.export-item'); if (exportItem) { e.stopPropagation(); const action = exportItem.dataset.action; const country = exportItem.dataset.country; if (action === 'export-json') exportData('json'); else if (action === 'export-csv') exportData('csv'); else if (action === 'share-url') shareCurrentView(); else if (action === 'export-country-json') exportCountry(country, 'json'); else if (action === 'export-country-csv') exportCountry(country, 'csv'); else if (action === 'share-country') shareCountry(country); }
+});
+
+$("#list").addEventListener("keydown", e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const head = e.target.closest('.head');
+    if (head) { e.preventDefault(); head.click(); }
   }
 });
 
 // Ranking weight sliders
 ['temp','rain','humid','hazard','crowd'].forEach(key => {
-  $(`#w-${key}`).addEventListener('input', e => {
-    rankingWeights[key] = parseInt(e.target.value);
-    $(`#w-${key}-val`).textContent = `${rankingWeights[key]}%`;
-  });
-  $(`#w-${key}`).addEventListener('change', () => {
-    saveRankingWeights();
-  });
+  $(`#w-${key}`).addEventListener('input', e => { rankingWeights[key] = parseInt(e.target.value); $(`#w-${key}-val`).textContent = `${rankingWeights[key]}%`; });
+  $(`#w-${key}`).addEventListener('change', saveRankingWeights);
 });
 $('#reset-weights').addEventListener('click', resetRankingWeights);
 
-// Check for shared view or country in URL
+// Export dropdown keyboard
+document.querySelectorAll('.export-dropdown').forEach(dd => {
+  dd.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { const btn = dd.querySelector('.export-btn'); if (btn) btn.focus(); }
+  });
+});
+
+// ============ SERVICE WORKER REGISTRATION ============
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
+  });
+}
+
+// ============ INITIALIZATION ============
 (function() {
   const params = new URLSearchParams(window.location.search);
-  if (params.has('view')) {
-    loadSharedView(params.get('view'));
-  } else if (params.has('country')) {
-    // Wait for render then load country
-    setTimeout(() => loadSharedCountry(params.get('country')), 500);
-  } else {
-    // Normal init
-    buildChips();
-    render();
-    initMap();
-    updateRankingWeightInputs();
-  }
+  if (params.has('view')) loadSharedView(params.get('view'));
+  else if (params.has('country')) setTimeout(() => loadSharedCountry(params.get('country')), 500);
+  else { buildChips(); render(); initMap(); updateRankingWeightInputs(); }
 })();
 </script>
 </body>
