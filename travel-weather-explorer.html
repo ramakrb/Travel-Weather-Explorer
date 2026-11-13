@@ -703,7 +703,7 @@ function buildTravelTypeChips() {
   $("#travel-type-chips").innerHTML = h;
 }
 
-const debouncedFilter = debounce(() => render(), 150);
+const debouncedFilter = debounce((e) => { S.q = e.target.value; render(); }, 150);
 
 function filtered() {
   const toks = S.q.toLowerCase().split(/\s+/).filter(Boolean);
