@@ -340,6 +340,24 @@ footer b { color: #e2e8f0; }
 .skeleton { background: linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* City weather section */
+.city-section { margin: 10px 0 6px; padding: 10px 12px; background: var(--accent-soft); border-radius: 10px; }
+.city-section h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.city-search-row { position: relative; margin-bottom: 6px; }
+.city-search { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 13px; }
+.city-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); z-index: 50; max-height: 200px; overflow-y: auto; display: none; }
+.city-result { padding: 8px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line); }
+.city-result:hover { background: var(--bg); }
+.city-result:last-child { border-bottom: none; }
+.city-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.city-chip { padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 12px; cursor: pointer; transition: all .15s; }
+.city-chip:hover { border-color: var(--accent); color: var(--accent); }
+.city-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.city-chip .remove { margin-left: 4px; opacity: .7; }
+.city-chip .remove:hover { opacity: 1; color: #fff; }
+.city-status { font-size: 11.5px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+.city-back { font-size: 11.5px; color: var(--accent); cursor: pointer; margin-left: 8px; text-decoration: underline; }
+
 /* Empty state */
 .empty-state { padding: 40px 24px; text-align: center; color: var(--muted); }
 .empty-state .empty-icon { font-size: 40px; margin-bottom: 8px; }
@@ -610,6 +628,65 @@ try { const saved = JSON.parse(localStorage.getItem('tw-ranking-weights')); if (
 
 // Chart instances storage
 const precipCharts = new Map();
+
+// ============ CITY WEATHER ============
+const CITY_CACHE_KEY = 'tw-city-climate';
+let cityClimateCache = {};
+try { cityClimateCache = JSON.parse(localStorage.getItem(CITY_CACHE_KEY) || '{}'); } catch(e) { cityClimateCache = {}; }
+function saveCityCache() { try { localStorage.setItem(CITY_CACHE_KEY, JSON.stringify(cityClimateCache)); } catch(e) {} }
+
+const userCities = {}; // country -> array of {name,lat,lon}
+const UC_KEY = 'tw-user-cities';
+try { Object.assign(userCities, JSON.parse(localStorage.getItem(UC_KEY) || '{}')); } catch(e) {}
+function saveUserCities() { try { localStorage.setItem(UC_KEY, JSON.stringify(userCities)); } catch(e) {} }
+
+const cityInflight = new Map();
+
+async function geocodeCity(q) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('geocode failed');
+  const j = await r.json();
+  return j.results || [];
+}
+
+async function fetchCityClimate(city) {
+  const key = `${city.lat.toFixed(4)},${city.lon.toFixed(4)}`;
+  if (cityClimateCache[key]) return cityClimateCache[key];
+  if (cityInflight.has(key)) return cityInflight.get(key);
+  const p = (async () => {
+    const url = `https://climate-api.open-meteo.com/v1/climate?latitude=${city.lat}&longitude=${city.lon}&start_date=1991-01-01&end_date=2020-12-31&daily=temperature_2m_mean,temperature_2m_min,temperature_2m_max,precipitation_sum`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('climate fetch failed');
+    const j = await r.json();
+    const d = j.daily;
+    const agg = (arr, times) => {
+      const out = new Array(12).fill(0); const cnt = new Array(12).fill(0);
+      arr.forEach((v,i) => {
+        if (v == null) return;
+        const mi = new Date(times[i]).getMonth();
+        out[mi] += v; cnt[mi]++;
+      });
+      return out.map((v,i) => cnt[i] ? Math.round((v/cnt[i])*10)/10 : null);
+    };
+    const climate = {
+      tMean: agg(d.temperature_2m_mean, d.time),
+      tMin: agg(d.temperature_2m_min, d.time),
+      tMax: agg(d.temperature_2m_max, d.time),
+      precip: agg(d.precipitation_sum, d.time).map(v => v == null ? 0 : Math.round(v)),
+      fetchedAt: Date.now()
+    };
+    cityClimateCache[key] = climate;
+    saveCityCache();
+    return climate;
+  })();
+  cityInflight.set(key, p);
+  try { const res = await p; return res; }
+  finally { cityInflight.delete(key); }
+}
+
+// currently selected city per country
+const selectedCity = {};
 
 // Map variables
 let map, geoJsonLayer, countryLayers = {}, mapLoaded = false;
@@ -892,9 +969,45 @@ function card(d) {
     <div class="bars" role="img" aria-label="Monthly rank bars">${bars}</div>
     <div class="legend" aria-label="Rank legend">${legend}</div>
     <p class="rankline">Months ranked 1–12 by weather <i>and</i> crowds; #1 is the best of the year. Temperatures are typical ranges for main tourist areas. 💧 = avg monthly rainfall (mm).</p>
+    <div class="city-section" data-country="${esc(d.name)}">
+      <h4>🏙️ City-level weather (optional)</h4>
+      <div class="city-search-row">
+        <input class="city-search" type="search" placeholder="Add a city (e.g. Tokyo, Paris)…" aria-label="Search city to add" data-country="${esc(d.name)}">
+        <div class="city-results" data-country="${esc(d.name)}"></div>
+      </div>
+      <div class="city-chips" data-country="${esc(d.name)}"></div>
+      <div class="city-status" data-country="${esc(d.name)}"></div>
+    </div>
     <div class="precip-chart-container" aria-label="Precipitation chart"><canvas id="${chartId}" role="img" aria-label="Monthly rainfall chart"></canvas></div>
     <div class="grid">${bestLine}${entry}${adv}${notes}</div>
   </div></section>`;
+}
+
+function getCityList(country) {
+  const saved = userCities[country] || [];
+  return saved.slice();
+}
+
+function renderCityChips(country) {
+  const container = document.querySelector(`.city-chips[data-country="${CSS.escape(country)}"]`);
+  if (!container) return;
+  const cities = getCityList(country);
+  const sel = selectedCity[country];
+  let h = cities.map(c => `<span class="city-chip ${sel && sel.name===c.name?'on':''}" data-city="${esc(c.name)}" data-country="${esc(country)}">${esc(c.name)}<span class="remove" data-remove="${esc(c.name)}" data-country="${esc(country)}" title="Remove">×</span></span>`).join('');
+  if (!cities.length) h = `<span style="font-size:12px;color:var(--muted)">No cities yet — search above to add one.</span>`;
+  container.innerHTML = h;
+  const status = document.querySelector(`.city-status[data-country="${CSS.escape(country)}"]`);
+  if (status) {
+    if (sel) status.innerHTML = `Showing weather for <b>${esc(sel.name)}</b> (city-level). <span class="city-back" data-back="${esc(country)}">Use country averages</span>`;
+    else status.textContent = '';
+  }
+}
+
+function buildAllCityChips() {
+  document.querySelectorAll('.city-section').forEach(sec => {
+    const country = sec.dataset.country;
+    renderCityChips(country);
+  });
 }
 
 function render() {
@@ -912,6 +1025,7 @@ function render() {
   
   highlightCountriesOnMap(list);
   buildTravelTypeChips();
+  buildAllCityChips();
   updateRankingWeightInputs();
 }
 
@@ -1181,6 +1295,115 @@ $("#list").addEventListener("keydown", e => {
     if (head) { e.preventDefault(); head.click(); }
   }
 });
+
+// ============ CITY SEARCH & SELECTION ============
+const citySearchTimers = {};
+document.addEventListener('input', e => {
+  const input = e.target.closest('.city-search');
+  if (!input) return;
+  const country = input.dataset.country;
+  const q = input.value.trim();
+  const resultsEl = document.querySelector(`.city-results[data-country="${CSS.escape(country)}"]`);
+  if (!resultsEl) return;
+  clearTimeout(citySearchTimers[country]);
+  if (q.length < 2) { resultsEl.style.display='none'; resultsEl.innerHTML=''; return; }
+  citySearchTimers[country] = setTimeout(async () => {
+    try {
+      const res = await geocodeCity(q);
+      // prefer results in the same country (best-effort name match)
+      const filtered = res.filter(r => !r.country || r.country.toLowerCase().includes(country.toLowerCase().split(' ')[0]) || country.toLowerCase().includes((r.country||'').toLowerCase().split(' ')[0]));
+      const list = (filtered.length ? filtered : res).slice(0,8);
+      resultsEl.innerHTML = list.map(r => `<div class="city-result" data-name="${esc(r.name)}" data-lat="${r.latitude}" data-lon="${r.longitude}" data-country="${esc(country)}">${esc(r.name)}${r.admin1?', '+esc(r.admin1):''} — ${esc(r.country||'')}</div>`).join('');
+      resultsEl.style.display = list.length ? 'block' : 'none';
+    } catch(err) {
+      resultsEl.innerHTML = `<div class="city-result">Search failed</div>`;
+      resultsEl.style.display = 'block';
+    }
+  }, 300);
+});
+
+document.addEventListener('click', async e => {
+  // select geocode result
+  const resEl = e.target.closest('.city-result');
+  if (resEl && resEl.dataset.lat) {
+    const country = resEl.dataset.country;
+    const city = { name: resEl.dataset.name, lat: parseFloat(resEl.dataset.lat), lon: parseFloat(resEl.dataset.lon) };
+    if (!userCities[country]) userCities[country] = [];
+    if (!userCities[country].some(c=>c.name===city.name)) userCities[country].push(city);
+    saveUserCities();
+    const resultsEl = document.querySelector(`.city-results[data-country="${CSS.escape(country)}"]`);
+    if (resultsEl) { resultsEl.style.display='none'; resultsEl.innerHTML=''; }
+    const input = document.querySelector(`.city-search[data-country="${CSS.escape(country)}"]`);
+    if (input) input.value = '';
+    await selectCity(country, city);
+    return;
+  }
+  // remove city
+  const removeEl = e.target.closest('.remove');
+  if (removeEl) {
+    e.stopPropagation();
+    const country = removeEl.dataset.country;
+    const name = removeEl.dataset.remove;
+    if (userCities[country]) userCities[country] = userCities[country].filter(c=>c.name!==name);
+    saveUserCities();
+    if (selectedCity[country] && selectedCity[country].name === name) delete selectedCity[country];
+    render();
+    return;
+  }
+  // select city chip
+  const chip = e.target.closest('.city-chip');
+  if (chip && !e.target.closest('.remove')) {
+    const country = chip.dataset.country;
+    const name = chip.dataset.city;
+    const city = (userCities[country]||[]).find(c=>c.name===name);
+    if (city) await selectCity(country, city);
+    return;
+  }
+  // back to country averages
+  const back = e.target.closest('.city-back');
+  if (back) {
+    const country = back.dataset.back;
+    delete selectedCity[country];
+    render();
+    return;
+  }
+});
+
+async function selectCity(country, city) {
+  selectedCity[country] = city;
+  renderCityChips(country);
+  const status = document.querySelector(`.city-status[data-country="${CSS.escape(country)}"]`);
+  if (status) status.textContent = `Loading ${city.name}…`;
+  try {
+    const climate = await fetchCityClimate(city);
+    // update chart with city data
+    const d = DATA.find(x=>x.name===country);
+    const key = normKey(country);
+    const canvas = document.getElementById(`precip-chart-${key}`);
+    if (canvas) {
+      const cityD = { name: city.name, r: d.r, p: climate.precip, m: d.m };
+      renderPrecipChart(canvas, cityD);
+    }
+    // update month strip temps to city values
+    const cardEl = document.querySelector(`.card[data-name="${CSS.escape(country)}"]`);
+    if (cardEl) {
+      const cells = cardEl.querySelectorAll('.monthstrip .mo');
+      cells.forEach((cell,i) => {
+        const t = cell.querySelector('.mo-t');
+        if (t && climate.tMin[i] != null && climate.tMax[i] != null) {
+          t.textContent = temp(Math.round(climate.tMin[i]), Math.round(climate.tMax[i]));
+        }
+        const pH = cell.querySelector('.mo-p');
+        if (pH) pH.textContent = `💧 ${climate.precip[i]}mm`;
+      });
+    }
+    if (status) status.innerHTML = `Showing weather for <b>${esc(city.name)}</b> (city-level). <span class="city-back" data-back="${esc(country)}">Use country averages</span>`;
+  } catch(err) {
+    if (status) status.textContent = `Failed to load ${city.name}.`;
+    delete selectedCity[country];
+    renderCityChips(country);
+  }
+}
 
 // Ranking weight sliders
 ['temp','rain','humid','hazard','crowd'].forEach(key => {
