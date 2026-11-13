@@ -582,9 +582,9 @@ function initMap() {
   
   map = L.map('map', { keyboard: true }).setView([20, 0], 2);
   
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 18
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 19
   }).addTo(map);
   
   fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
