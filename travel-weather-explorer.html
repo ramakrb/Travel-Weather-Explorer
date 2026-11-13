@@ -340,6 +340,17 @@ footer b { color: #e2e8f0; }
 .skeleton { background: linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* Compare bar */
+.compare-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 16px; display: none; z-index: 9998; box-shadow: 0 -4px 16px rgba(0,0,0,.1); }
+.compare-bar.show { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.compare-chip { background: var(--accent-soft); color: var(--accent); padding: 4px 10px; border-radius: 99px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.compare-chip .x { cursor: pointer; }
+.compare-view { margin: 16px 0; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.compare-table th, .compare-table td { border: 1px solid var(--line); padding: 6px; text-align: center; }
+.compare-table th { background: var(--bg); }
+.compare-cb { margin-right: 6px; }
+
 /* City weather section */
 .city-section { margin: 10px 0 6px; padding: 10px 12px; background: var(--accent-soft); border-radius: 10px; }
 .city-section h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
@@ -474,6 +485,8 @@ header .form-control::placeholder { color: #94a3b8; }
           <div class="export-item" data-action="export-json" role="menuitem">📄 Download JSON</div>
           <div class="export-item" data-action="export-csv" role="menuitem">📊 Download CSV</div>
           <div class="export-item" data-action="share-url" role="menuitem">🔗 Copy Shareable Link</div>
+          <div class="export-item" data-action="export-cities" role="menuitem">🏙️ Export City Data</div>
+          <div class="export-item" data-action="import-cities" role="menuitem">📥 Import City Data</div>
         </div>
       </div>
     </div>
@@ -522,6 +535,13 @@ header .form-control::placeholder { color: #94a3b8; }
     <div id="map-container" role="application" aria-label="World map showing travel destinations"><div id="map"></div></div>
   </section>
 
+  <!-- Comparison View -->
+  <section id="compare-view" class="compare-view" style="display:none;" aria-labelledby="compare-title">
+    <h2 id="compare-title" class="h5 mb-2">Comparison</h2>
+    <div id="compare-content"></div>
+    <button class="btn btn-sm btn-outline-secondary mt-2" id="close-compare">Close comparison</button>
+  </section>
+
   <!-- Country List Section -->
   <section id="list-section" aria-labelledby="list-title">
     <h2 id="list-title" class="visually-hidden">Country List</h2>
@@ -542,8 +562,17 @@ header .form-control::placeholder { color: #94a3b8; }
 <p><b>Export.</b> Download your filtered results as JSON/CSV or share a link that restores your view.</p>
 </div></footer>
 
+<!-- Compare bar -->
+<div class="compare-bar" id="compare-bar">
+  <span id="compare-count">0 selected</span>
+  <div id="compare-chips"></div>
+  <button class="btn btn-sm btn-primary" id="compare-now">Compare now</button>
+  <button class="btn btn-sm btn-outline-secondary" id="compare-clear">Clear</button>
+</div>
+
 <!-- Toast container for notifications -->
 <div class="toast-container" id="toast-container" aria-live="polite" aria-label="Notifications"></div>
+<input type="file" id="city-import-file" accept="application/json" style="display:none">
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -687,6 +716,9 @@ async function fetchCityClimate(city) {
 
 // currently selected city per country
 const selectedCity = {};
+
+// comparison set
+const compareSet = new Set();
 
 // Map variables
 let map, geoJsonLayer, countryLayers = {}, mapLoaded = false;
@@ -960,11 +992,11 @@ function card(d) {
       ${badge}
       <span class="cost">${cost(d)}</span>
       <button class="fav-btn ${isFav?'active':''}" data-country="${esc(d.name)}" title="${isFav?'Remove from favorites':'Add to favorites'}" aria-label="${isFav?'Remove from favorites':'Add to favorites'} ${esc(d.name)}" aria-pressed="${isFav}">${isFav?'❤️':'🤍'}</button>
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;margin:0;cursor:pointer;"><input type="checkbox" class="compare-cb" data-country="${esc(d.name)}" ${compareSet && compareSet.has(d.name)?'checked':''}> Compare</label>
       ${cardExport}
     </div>
   </div><div class="chev" aria-hidden="true">▾</div></div>
   <div class="body" id="card-body-${key}" role="region" aria-label="${esc(d.name)} details">
-    ${travelTypeBadges ? `<div class="travel-type-chips">${travelTypeBadges}</div>` : ''}
     <div class="monthstrip" role="table" aria-label="Monthly weather">${d.m.map((m,i) => monthCell(d,i)).join("")}</div>
     <div class="bars" role="img" aria-label="Monthly rank bars">${bars}</div>
     <div class="legend" aria-label="Rank legend">${legend}</div>
@@ -976,6 +1008,10 @@ function card(d) {
         <div class="city-results" data-country="${esc(d.name)}"></div>
       </div>
       <div class="city-chips" data-country="${esc(d.name)}"></div>
+      <div class="city-notes-row" data-country="${esc(d.name)}" style="display:none;margin-top:6px;">
+        <textarea class="city-notes" data-country="${esc(d.name)}" rows="2" placeholder="Notes for this city (e.g. airport transit, tips)…" style="width:100%;font-size:12px;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);"></textarea>
+        <div style="margin-top:4px;font-size:11.5px;"><a class="city-transit-link" data-country="${esc(d.name)}" target="_blank" rel="noopener" style="color:var(--accent);">Find airport ↔ city transit on Google Maps</a></div>
+      </div>
       <div class="city-status" data-country="${esc(d.name)}"></div>
     </div>
     <div class="precip-chart-container" aria-label="Precipitation chart"><canvas id="${chartId}" role="img" aria-label="Monthly rainfall chart"></canvas></div>
@@ -1398,11 +1434,130 @@ async function selectCity(country, city) {
       });
     }
     if (status) status.innerHTML = `Showing weather for <b>${esc(city.name)}</b> (city-level). <span class="city-back" data-back="${esc(country)}">Use country averages</span>`;
+    // show notes row
+    const notesRow = document.querySelector(`.city-notes-row[data-country="${CSS.escape(country)}"]`);
+    if (notesRow) {
+      notesRow.style.display = 'block';
+      const ta = notesRow.querySelector('.city-notes');
+      if (ta) ta.value = city.notes || '';
+      const link = notesRow.querySelector('.city-transit-link');
+      if (link) link.href = `https://www.google.com/maps/search/airport+transit+${encodeURIComponent(city.name)}`;
+    }
   } catch(err) {
     if (status) status.textContent = `Failed to load ${city.name}.`;
     delete selectedCity[country];
     renderCityChips(country);
   }
+}
+
+// save city notes
+document.addEventListener('change', e => {
+  const ta = e.target.closest('.city-notes');
+  if (!ta) return;
+  const country = ta.dataset.country;
+  const city = selectedCity[country];
+  if (city) {
+    city.notes = ta.value;
+    const uc = (userCities[country]||[]).find(c=>c.name===city.name);
+    if (uc) uc.notes = ta.value;
+    saveUserCities();
+  }
+});
+
+// delegated export-item handling (covers header + cards)
+document.addEventListener('click', e => {
+  const item = e.target.closest('.export-item');
+  if (!item) return;
+  const action = item.dataset.action;
+  const country = item.dataset.country;
+  if (action === 'export-json') exportData('json');
+  else if (action === 'export-csv') exportData('csv');
+  else if (action === 'share-url') shareCurrentView();
+  else if (action === 'export-country-json') exportCountry(country, 'json');
+  else if (action === 'export-country-csv') exportCountry(country, 'csv');
+  else if (action === 'share-country') shareCountry(country);
+  else if (action === 'export-cities') exportCityData();
+  else if (action === 'import-cities') document.getElementById('city-import-file').click();
+});
+
+// export/import city data
+function exportCityData() {
+  const payload = { userCities, cityClimateCache, exportedAt: new Date().toISOString() };
+  downloadFile(JSON.stringify(payload, null, 2), 'travel-weather-city-data.json', 'application/json');
+  showToast('City data exported');
+}
+document.getElementById('city-import-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const payload = JSON.parse(reader.result);
+      if (payload.userCities) Object.assign(userCities, payload.userCities);
+      if (payload.cityClimateCache) Object.assign(cityClimateCache, payload.cityClimateCache);
+      saveUserCities(); saveCityCache();
+      showToast('City data imported');
+      render();
+    } catch(err) { showToast('Import failed'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// hide travel type filter (not useful) - keep data for search
+const ttChips = document.getElementById('travel-type-chips');
+if (ttChips) ttChips.style.display = 'none';
+
+// Compare checkboxes
+document.addEventListener('change', e => {
+  const cb = e.target.closest('.compare-cb');
+  if (!cb) return;
+  const country = cb.dataset.country;
+  if (cb.checked) {
+    if (compareSet.size >= 4) { cb.checked = false; showToast('Max 4 countries for comparison'); return; }
+    compareSet.add(country);
+  } else compareSet.delete(country);
+  updateCompareBar();
+});
+
+function updateCompareBar() {
+  const bar = document.getElementById('compare-bar');
+  const count = document.getElementById('compare-count');
+  const chips = document.getElementById('compare-chips');
+  if (compareSet.size > 0) bar.classList.add('show'); else bar.classList.remove('show');
+  count.textContent = `${compareSet.size} selected`;
+  chips.innerHTML = Array.from(compareSet).map(c => `<span class="compare-chip">${esc(c)} <span class="x" data-remove="${esc(c)}">×</span></span>`).join('');
+}
+
+document.addEventListener('click', e => {
+  const x = e.target.closest('.compare-chip .x');
+  if (x) {
+    const c = x.dataset.remove;
+    compareSet.delete(c);
+    // uncheck checkbox
+    const cb = document.querySelector(`.compare-cb[data-country="${CSS.escape(c)}"]`);
+    if (cb) cb.checked = false;
+    updateCompareBar();
+    return;
+  }
+  if (e.target.closest('#compare-clear')) { compareSet.clear(); document.querySelectorAll('.compare-cb').forEach(cb=>cb.checked=false); updateCompareBar(); return; }
+  if (e.target.closest('#compare-now')) { renderComparison(); return; }
+  if (e.target.closest('#close-compare')) { document.getElementById('compare-view').style.display='none'; return; }
+});
+
+function renderComparison() {
+  const countries = Array.from(compareSet).map(n => DATA.find(d=>d.name===n)).filter(Boolean);
+  if (countries.length < 2) { showToast('Select at least 2 countries'); return; }
+  const view = document.getElementById('compare-view');
+  const content = document.getElementById('compare-content');
+  let html = '<table class="compare-table"><thead><tr><th>Month</th>' + countries.map(c=>`<th>${esc(c.name)}</th>`).join('') + '</tr></thead><tbody>';
+  for (let i=0;i<12;i++) {
+    html += `<tr><td><b>${MABBR[i]}</b></td>` + countries.map(c => `<td>${temp(c.m[i][0],c.m[i][1])}<br><small>💧 ${c.p?c.p[i]:0}mm</small></td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  content.innerHTML = html;
+  view.style.display = 'block';
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Ranking weight sliders
