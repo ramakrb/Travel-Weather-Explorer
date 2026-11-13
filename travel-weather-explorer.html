@@ -556,6 +556,9 @@ const DATA = window.TWDATA.map(d => {
 let U = "C", open = new Set();
 const S = {q:"",region:"All",month:0,adv:"All",sort:"az", travelType:"All"};
 const $ = s => document.querySelector(s);
+// Debug: verify search input exists
+console.log('Search input:', $('#q'));
+console.log('DATA length:', window.TWDATA ? window.TWDATA.length : 'undefined');
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&","<":"<",">":">",'"':""","'":"'"}[c]));
 const c2f = v => Math.round(v*9/5+32);
 const temp = (l,h) => U==="C"?`${l}–${h}°C`:`${c2f(l)}–${c2f(h)}°F`;
@@ -704,7 +707,11 @@ function buildTravelTypeChips() {
 }
 
 // Simple search handler (no debounce for debugging)
-function handleSearch(e) { S.q = e.target.value; render(); }
+function handleSearch(e) { 
+  console.log('Search input:', e.target.value);
+  S.q = e.target.value; 
+  render(); 
+}
 
 function filtered() {
   const toks = S.q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -843,6 +850,7 @@ function card(d) {
 }
 
 function render() {
+  console.log('render() called, S.q =', S.q);
   const list = filtered();
   const mline = S.month ? ` · ranked for <b>${MONTHS[S.month-1]}</b> (weather + crowds, #1 best)` : "";
   $("#meta").innerHTML = `Showing <b>${list.length}</b> of <b>${DATA.length}</b> destinations${mline}${U==="C"?" · °C":" · °F"}`;
