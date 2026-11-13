@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Travel Weather">
 <link rel="apple-touch-icon" href="icon-192.png">
 <!-- Bootstrap 5 CSS for responsive design -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
 <!-- Leaflet CSS for interactive map -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <!-- Chart.js for precipitation charts -->
@@ -493,7 +493,7 @@ header .form-control::placeholder { color: #94a3b8; }
 <!-- TopoJSON for parsing country boundaries -->
 <script src="https://unpkg.com/topojson@3"></script>
 <!-- Bootstrap JS (optional, for dropdowns etc) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDf" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
 <script>
 // ============ PERFORMANCE UTILITIES ============
@@ -697,7 +697,7 @@ function buildTravelTypeChips() {
   const types = Object.keys(typeCounts).sort();
   let h = `<span class="travel-type-chip ${S.travelType==="All"?"on":""}" data-type="All" role="button" tabindex="0" aria-pressed="${S.travelType==='All'}">All Types</span>`;
   types.forEach(t => {
-    const info = TRAVEL_TYPES[t] || {label:t, color:var(--accent)};
+    const info = TRAVEL_TYPES[t] || {label:t, color:"var(--accent)"};
     h += `<span class="travel-type-chip ${S.travelType===t?"on":""}" data-type="${esc(t)}" role="button" tabindex="0" aria-pressed="${S.travelType===t}" style="border-color:${info.color};${S.travelType===t?'background:'+info.color+';color:white;':''}">${info.label} (${typeCounts[t]})</span>`;
   });
   $("#travel-type-chips").innerHTML = h;
